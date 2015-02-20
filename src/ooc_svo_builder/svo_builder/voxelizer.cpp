@@ -22,8 +22,8 @@ void voxelize_huang_method(TriReader &reader, const uint64_t morton_start, const
 #endif
 	// compute partition min and max in grid coords
 	AABox<uivec3> p_bbox_grid;
-	mortonDecode(morton_start, p_bbox_grid.min[2], p_bbox_grid.min[1], p_bbox_grid.min[0]);
-	mortonDecode(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
+	mortonDecode_magicbits(morton_start, p_bbox_grid.min[2], p_bbox_grid.min[1], p_bbox_grid.min[0]);
+	mortonDecode_magicbits(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
 	// misc calc
 	float unit_div = 1.0f / unitlength;
 	float radius = unitlength / 2.0f;
@@ -145,8 +145,8 @@ void voxelize_schwarz_method(TriReader &reader, const uint64_t morton_start, con
 
 	// compute partition min and max in grid coords
 	AABox<uivec3> p_bbox_grid;
-	mortonDecode(morton_start, p_bbox_grid.min[2], p_bbox_grid.min[1], p_bbox_grid.min[0]);
-	mortonDecode(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
+	mortonDecode_magicbits(morton_start, p_bbox_grid.min[2], p_bbox_grid.min[1], p_bbox_grid.min[0]);
+	mortonDecode_magicbits(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
 
 	// compute maximum grow size for data array
 #ifdef BINARY_VOXELIZATION

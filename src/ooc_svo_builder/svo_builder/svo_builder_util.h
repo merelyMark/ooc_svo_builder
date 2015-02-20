@@ -15,7 +15,7 @@ using namespace std;
 // helper method to convert morton number to RGB color, for debug coloring purposes
 inline vec3 mortonToRGB(const uint64_t morton_number, const size_t gridsize){
 	unsigned int x,y,z;
-	mortonDecode(morton_number,z,y,x);
+	mortonDecode_magicbits(morton_number, z, y, x);
 	return vec3((float)x/gridsize, (float)y/gridsize, (float)z/gridsize);
 }
 
