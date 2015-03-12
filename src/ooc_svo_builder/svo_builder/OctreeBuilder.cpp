@@ -104,7 +104,7 @@ Node OctreeBuilder::groupNodes(const vector<Node> &buffer){
 void OctreeBuilder::addEmptyVoxel(const int buffer){
 	b_buffers[buffer].push_back(Node());
 	refineBuffers(buffer);
-	b_current_morton = (uint64_t)(b_current_morton + pow(8.0, b_maxdepth - buffer)); // because we're adding at a certain level
+    b_current_morton = (mort_t)(b_current_morton + pow(8.0, b_maxdepth - buffer)); // because we're adding at a certain level
 }
 
 // REFINE BUFFERS: check all levels from start_depth up and group 8 nodes on a higher level
@@ -127,7 +127,7 @@ void OctreeBuilder::refineBuffers(const int start_depth){
 }
 
 // Add a datapoint to the octree: this is the main method used to push datapoints
-void OctreeBuilder::addVoxel(const uint64_t morton_number){
+void OctreeBuilder::addVoxel(const mort_t morton_number){
 	// Padding for missed morton numbers
 	if (morton_number != b_current_morton){
 		fastAddEmpty(morton_number - b_current_morton);

@@ -8,27 +8,28 @@
 #include <stdint.h>
 #include <limits.h>
 
+#define mort_t uint64_t
 using namespace std;
 
-uint64_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z);
-uint64_t mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z);
-uint64_t mortonEncode_for(unsigned int x, unsigned int y, unsigned int z);
-void mortonDecode(uint64_t morton, unsigned int& x, unsigned int& y, unsigned int& z);
+mort_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z);
+mort_t mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z);
+mort_t mortonEncode_for(unsigned int x, unsigned int y, unsigned int z);
+void mortonDecode(mort_t morton, unsigned int& x, unsigned int& y, unsigned int& z);
 
 // VERSION WITH FOR LOOP
 // ---------------------
-inline uint64_t mortonEncode_for(unsigned int x, unsigned int y, unsigned int z){
-	uint64_t answer = 0;
-	for (uint64_t i = 0; i < (sizeof(int) * CHAR_BIT); ++i) {
-		answer |= ((x & ((uint64_t)1 << i)) << 2*i) | ((y & ((uint64_t)1 << i)) << (2*i + 1)) | ((z & ((uint64_t)1 << i)) << (2*i + 2));
+inline mort_t mortonEncode_for(unsigned int x, unsigned int y, unsigned int z){
+        mort_t answer = 0;
+        for (mort_t i = 0; i < (sizeof(int) * CHAR_BIT); ++i) {
+                answer |= ((x & ((mort_t)1 << i)) << 2*i) | ((y & ((mort_t)1 << i)) << (2*i + 1)) | ((z & ((mort_t)1 << i)) << (2*i + 2));
 	}
 	return answer;
 }
 
 // VERSION WITH MAGIC BITS
 // -----------------------
-inline uint64_t splitBy3(int a){
-	uint64_t x = a & 0x1fffff;
+inline mort_t splitBy3(int a){
+        mort_t x = a & 0x1fffff;
 	x = (x | x << 32) & 0x1f00000000ffff;
 	x = (x | x << 16) & 0x1f0000ff0000ff;
 	x = (x | x << 8) & 0x100f00f00f00f00f;
@@ -37,8 +38,8 @@ inline uint64_t splitBy3(int a){
 	return x;
 }
 
-inline uint64_t mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z){
-	uint64_t answer = 0;
+inline mort_t mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z){
+        mort_t answer = 0;
 	answer |= splitBy3(x) | splitBy3(y) << 1 | splitBy3(z) << 2;
 	return answer;
 }
@@ -154,8 +155,8 @@ static const uint32_t morton256_z[256] = {
 	0x00924804, 0x00924820, 0x00924824, 0x00924900, 0x00924904, 0x00924920, 0x00924924
 };
 
-inline uint64_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z){
-	uint64_t answer = 0;
+inline mort_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z){
+        mort_t answer = 0;
 	answer =	morton256_z[(z >> 16) & 0xFF ] |
 				morton256_y[(y >> 16) & 0xFF ] |
 				morton256_x[(x >> 16) & 0xFF ];
@@ -171,14 +172,14 @@ inline uint64_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z)
 }
 
 // decode a given 64-bit morton code to an integer (x,y,z) coordinate
-inline void mortonDecode(uint64_t morton, unsigned int& x, unsigned int& y, unsigned int& z){
+inline void mortonDecode(mort_t morton, unsigned int& x, unsigned int& y, unsigned int& z){
 	x = 0;
 	y = 0;
 	z = 0;
-	for (uint64_t i = 0; i < (sizeof(uint64_t) * CHAR_BIT)/3; ++i) {
-		x |= ((morton & (uint64_t( 1ull ) << uint64_t((3ull * i) + 0ull))) >> uint64_t(((3ull * i) + 0ull)-i));
-		y |= ((morton & (uint64_t( 1ull ) << uint64_t((3ull * i) + 1ull))) >> uint64_t(((3ull * i) + 1ull)-i));
-		z |= ((morton & (uint64_t( 1ull ) << uint64_t((3ull * i) + 2ull))) >> uint64_t(((3ull * i) + 2ull)-i));
+        for (mort_t i = 0; i < (sizeof(mort_t) * CHAR_BIT)/3; ++i) {
+                x |= ((morton & (mort_t( 1ull ) << mort_t((3ull * i) + 0ull))) >> mort_t(((3ull * i) + 0ull)-i));
+                y |= ((morton & (mort_t( 1ull ) << mort_t((3ull * i) + 1ull))) >> mort_t(((3ull * i) + 1ull)-i));
+                z |= ((morton & (mort_t( 1ull ) << mort_t((3ull * i) + 2ull))) >> mort_t(((3ull * i) + 2ull)-i));
 	}
 }
 

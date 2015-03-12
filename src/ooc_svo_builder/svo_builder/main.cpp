@@ -276,11 +276,11 @@ int main(int argc, char *argv[]) {
 
 	// General voxelization calculations (stuff we need throughout voxelization process)
 	float unitlength = (trip_info.mesh_bbox.max[0] - trip_info.mesh_bbox.min[0]) / (float)trip_info.gridsize;
-	uint64_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
+    mort_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
     tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
 
-    tbb::concurrent_vector<uint64_t> data; // Dynamic storage for morton codes
+    tbb::concurrent_vector<mort_t> data; // Dynamic storage for morton codes
 
     tbb::atomic<size_t> nfilled;
     nfilled = 0;
@@ -299,8 +299,8 @@ int main(int argc, char *argv[]) {
 		vox_total_timer.start(); // TIMING
 		cout << "Voxelizing partition " << i << " ..." << endl;
 		// morton codes for this partition
-		uint64_t start = i * morton_part;
-		uint64_t end = (i + 1) * morton_part;
+        mort_t start = i * morton_part;
+        mort_t end = (i + 1) * morton_part;
 		// open file to read triangles
 		vox_io_in_timer.start(); // TIMING
 		std::string part_data_filename = trip_info.base_filename + string("_") + val_to_string(i) + string(".tripdata");
@@ -323,7 +323,7 @@ int main(int argc, char *argv[]) {
 
         if (use_data){ // use array of morton codes to build the SVO
 			sort(data.begin(), data.end()); // sort morton codes
-//            for (tbb::concurrent_vector<uint64_t>::iterator it = data.begin(); it != data.end(); ++it){
+//            for (tbb::concurrent_vector<mort_t>::iterator it = data.begin(); it != data.end(); ++it){
 //				builder.addVoxel(*it);
 //			}
             for (int i=0; i<data.size(); i++){
@@ -332,7 +332,7 @@ int main(int argc, char *argv[]) {
 
 		}
 		else { // morton array overflowed : using slower way to build SVO
-			uint64_t morton_number;
+            mort_t morton_number;
 			for (size_t j = 0; j < morton_part; j++) {
 				if (!voxels[j] == EMPTY_VOXEL) {
 					morton_number = start + j;

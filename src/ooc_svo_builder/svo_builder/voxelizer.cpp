@@ -13,7 +13,7 @@ using namespace trimesh;
 
 template<char COUNT_ONLY>
 
-void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 
 {
     // read triangle
@@ -88,7 +88,7 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
         for (int y = t_bbox_grid.min[1]; y <= t_bbox_grid.max[1]; y++){
             for (int z = t_bbox_grid.min[2]; z <= t_bbox_grid.max[2]; z++){
 
-                const uint64_t index = mortonEncode_LUT(z, y, x);
+                const mort_t index = mortonEncode_LUT(z, y, x);
                 while(voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) == WORKING_VOXEL);
 
                 if (voxels[index - morton_start] == FULL_VOXEL){ continue; } // already marked, continue
@@ -139,7 +139,7 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
-void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
+void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
 
     vox_algo_timer.start();
 	memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
@@ -154,9 +154,9 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 
     size_t data_max_items;
 	if (use_data){
-		uint64_t max_bytes_data = (uint64_t) (((morton_end - morton_start)*sizeof(char)) * sparseness_limit);
+        mort_t max_bytes_data = (mort_t) (((morton_end - morton_start)*sizeof(char)) * sparseness_limit);
 
-		data_max_items = max_bytes_data / sizeof(uint64_t);
+        data_max_items = max_bytes_data / sizeof(mort_t);
 		data_max_items = max_bytes_data / sizeof(VoxelData);
 	}
 

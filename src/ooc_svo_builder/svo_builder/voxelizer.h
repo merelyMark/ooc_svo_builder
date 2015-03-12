@@ -5,6 +5,7 @@
 #include <TriReaderIter.h>
 #include <tbb/atomic.h>
 #include <tbb/concurrent_vector.h>
+#include <cuda_runtime.h>
 #include "globals.h"
 #include "intersection.h"
 #include "morton.h"
@@ -12,6 +13,8 @@
 
 // Voxelization-related stuff
 typedef Vec<3, unsigned int> uivec3;
+typedef unsigned long long int uint64;
+
 using namespace std;
 
 #define EMPTY_VOXEL 0
@@ -19,9 +22,12 @@ using namespace std;
 #define WORKING_VOXEL 2
 
 
+extern "C"
+void cudaRun(float3 *v0, float3 *v1, float3 *v2,const uint64 morton_start, const uint64 morton_end, const float unitlength, int* voxels, uint64 *data, float sparseness_limit, bool &use_data, uint *nfilled,
+             const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items);
 
 
-void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
+void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
 
 
 #endif // VOXELIZER_H_
