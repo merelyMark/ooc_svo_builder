@@ -305,9 +305,7 @@ int main(int argc, char *argv[]) {
 	uint64_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
     tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
-    for (int i=0; i<morton_part; i++){
-        voxels[i] = EMPTY_VOXEL;
-    }
+    memset(voxels, 0, morton_part);
 #ifdef BINARY_VOXELIZATION
     tbb::concurrent_vector<uint64_t> data; // Dynamic storage for morton codes
 #else

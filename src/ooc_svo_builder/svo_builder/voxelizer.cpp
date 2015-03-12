@@ -211,10 +211,7 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
             for (int z = t_bbox_grid.min[2]; z <= t_bbox_grid.max[2]; z++){
 
                 const uint64_t index = mortonEncode_LUT(z, y, x);
-                char voxel_val = -1;
-                do{
-                     voxel_val = voxels[index - morton_start].compare_and_swap(EMPTY_VOXEL, WORKING_VOXEL);
-                }while(voxel_val == WORKING_VOXEL);
+                while(voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) == WORKING_VOXEL);
 
                 if (voxels[index - morton_start] == FULL_VOXEL){ continue; } // already marked, continue
 
@@ -297,13 +294,13 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 //         iter != reader.triangles.end(); ++iter){
 
     vox_algo_timer.start();
-//#pragma omp parallel
+#pragma omp parallel
     for (int i=0; i<reader.triangles.size(); i++){
-
+        Triangle t = reader.triangles[i];
 #ifdef BINARY_VOXELIZATION
-        voxelize_triangle(reader.triangles[i], morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+        voxelize_triangle(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 #else
-        voxelize_triangle(reader.triangles[i], morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p );
+        voxelize_triangle(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p );
 #endif
     }
     vox_algo_timer.stop();
