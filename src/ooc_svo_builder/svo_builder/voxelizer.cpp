@@ -293,8 +293,7 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 //    for (iter = reader.triangles.begin();
 //         iter != reader.triangles.end(); ++iter){
 
-    vox_algo_timer.start();
-#pragma omp parallel
+#pragma omp parallel for
     for (int i=0; i<reader.triangles.size(); i++){
         Triangle t = reader.triangles[i];
 #ifdef BINARY_VOXELIZATION

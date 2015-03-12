@@ -305,7 +305,6 @@ int main(int argc, char *argv[]) {
 	uint64_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
     tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
-    memset(voxels, 0, morton_part);
 #ifdef BINARY_VOXELIZATION
     tbb::concurrent_vector<uint64_t> data; // Dynamic storage for morton codes
 #else
@@ -335,7 +334,7 @@ int main(int argc, char *argv[]) {
 		std::string part_data_filename = trip_info.base_filename + string("_") + val_to_string(i) + string(".tripdata");
         vox_io_in_timer.start();
         TriReaderIter reader = TriReaderIter(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
-        vox_io_in_timer.stop();
+
 
 		if (verbose) { cout << "  reading " << trip_info.part_tricounts[i] << " triangles from " << part_data_filename << endl; }
 		vox_io_in_timer.stop(); // TIMING
