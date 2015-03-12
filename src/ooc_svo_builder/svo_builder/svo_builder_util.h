@@ -5,6 +5,8 @@
 #include <vector>
 #include <sstream>
 #include <TriMesh.h>
+#include <omp.h>
+
 #include "morton.h"
 
 using namespace trimesh;
@@ -53,27 +55,27 @@ inline int isPowerOf2(unsigned int x){
 // Simple timer to measure time, using CLOCKS_PER_SEC
 // Should work on all platforms, sacrificing some precision.
 struct Timer {
-	clock_t Start;
-	clock_t Elapsed;
+    double Start;
+    double Elapsed;
 	Timer(){
 		Elapsed = 0;
-		Start = clock();
+        Start = omp_get_wtime();
 	}
 	void reset(){
-		Start = clock();
+        Start = omp_get_wtime();
 	}
 	void resetTotal(){
 		Elapsed = 0;
 	}
 	void start(){
-		Start = clock();
+        Start = omp_get_wtime();
 	}
 	void stop(){
-		clock_t End = clock();
+        double End = omp_get_wtime();
 		Elapsed = Elapsed + (End - Start);
 	}
 	double getTotalTimeSeconds() const{
-		return ((double) Elapsed)/ ((double) CLOCKS_PER_SEC);
+        return Elapsed;
 	}
 };
 
