@@ -20,10 +20,8 @@ using namespace std;
 
 
 
-#ifdef BINARY_VOXELIZATION
+
 void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
-#else
-void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<VoxelData> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
-#endif
+
 
 #endif // VOXELIZER_H_

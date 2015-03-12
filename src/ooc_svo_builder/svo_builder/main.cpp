@@ -50,11 +50,9 @@ Timer svo_algo_timer;
 
 void printInfo() {
 	cout << "--------------------------------------------------------------------" << endl;
-#ifdef BINARY_VOXELIZATION
-	cout << "Out-Of-Core SVO Builder " << version << " - Geometry only version" << endl;
-#else
-	cout << "Out-Of-Core SVO Builder " << version << endl;
-#endif
+
+    cout << "Out-Of-Core SVO Builder " << version << " - Geometry only version" << endl;
+
 #if defined(_WIN32) || defined(_WIN64)
 	cout << "Windows " << endl;
 #endif
@@ -146,28 +144,9 @@ void parseProgramParameters(int argc, char* argv[]) {
 		}
 		else if (string(argv[i]) == "-c") {
 			string color_input = string(argv[i + 1]);
-#ifdef BINARY_VOXELIZATION
-			cout << "You asked to generate colors, but we're only doing binary voxelisation." << endl;
-#else
-			if (color_input == "model") {
-				color = COLOR_FROM_MODEL;
-			}
-			else if (color_input == "linear") {
-				color = COLOR_LINEAR;
-				color_s = "Linear";
-			}
-			else if (color_input == "normal") {
-				color = COLOR_NORMAL;
-				color_s = "Normal";
-			}
-			else if (color_input == "fixed") {
-				color = COLOR_FIXED;
-				color_s = "Fixed";
-			}
-			else {
-				cout << "Unrecognized color switch: " << color_input << ", so reverting to colors from model." << endl;
-			}
-#endif
+
+            cout << "You asked to generate colors, but we're only doing binary voxelisation." << endl;
+
 			i++;
 		}
 		else if (string(argv[i]) == "-h") {
@@ -246,17 +225,12 @@ void readTriHeader(string& filename, TriInfo& tri_info){
 	}
 	if (verbose) { tri_info.print(); }
 	// Check if the user is using the correct executable for type of tri file
-#ifdef BINARY_VOXELIZATION
-	if (!tri_info.geometry_only) {
+
+    if (!tri_info.geometry_only) {
 		cout << "You're using a .tri file which contains more than just geometry with a geometry-only SVO Builder! Regenerate that .tri file using tri_convert_binary." << endl;
 		exit(0);
 	}
-#else
-	if (tri_info.geometry_only) {
-		cout << "You're using a .tri file which contains only geometry with the regular SVO Builder! Regenerate that .tri file using tri_convert." << endl;
-		exit(0);
-	}
-#endif
+
 }
 
 // Trip header handling and error checking
@@ -305,11 +279,9 @@ int main(int argc, char *argv[]) {
 	uint64_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
     tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
-#ifdef BINARY_VOXELIZATION
+
     tbb::concurrent_vector<uint64_t> data; // Dynamic storage for morton codes
-#else
-    tbb::concurrent_vector<VoxelData> data; // Dynamic storage for voxel data
-#endif 
+
     tbb::atomic<size_t> nfilled;
     nfilled = 0;
 	vox_total_timer.stop(); // TIMING
@@ -348,8 +320,8 @@ int main(int argc, char *argv[]) {
 		// build SVO
 		cout << "Building SVO for partition " << i << " ..." << endl;
 		svo_total_timer.start(); svo_algo_timer.start(); // TIMING
-#ifdef BINARY_VOXELIZATION
-		if (use_data){ // use array of morton codes to build the SVO
+
+        if (use_data){ // use array of morton codes to build the SVO
 			sort(data.begin(), data.end()); // sort morton codes
 //            for (tbb::concurrent_vector<uint64_t>::iterator it = data.begin(); it != data.end(); ++it){
 //				builder.addVoxel(*it);
@@ -368,22 +340,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
-#else
-		sort(data.begin(), data.end()); // sort
-        for (tbb::concurrent_vector<VoxelData>::iterator it = data.begin(); it != data.end(); ++it){
-			if (color == COLOR_FIXED){
-				it->color = fixed_color;
-			}
-			else if (color == COLOR_LINEAR){ // linear color scale
-				it->color = mortonToRGB(it->morton, gridsize);
-			}
-			else if (color == COLOR_NORMAL){ // color models using their normals
-				vec3 normal = normalize(it->normal);
-				it->color = vec3((normal[0] + 1.0f) / 2.0f, (normal[1] + 1.0f) / 2.0f, (normal[2] + 1.0f) / 2.0f);
-			}
-			builder.addVoxel(*it);
-		}
-#endif
+
 		svo_algo_timer.stop(); svo_total_timer.stop();  // TIMING
 	}
 	svo_total_timer.start(); svo_algo_timer.start(); // TIMING

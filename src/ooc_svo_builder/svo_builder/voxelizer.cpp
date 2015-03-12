@@ -12,16 +12,14 @@ using namespace trimesh;
 
 
 template<char COUNT_ONLY>
-#ifdef BINARY_VOXELIZATION
+
 void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
-#else
-void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<VoxelData> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p)
-#endif
+
 {
     // read triangle
 
 
-#ifdef BINARY_VOXELIZATION
+
     if (use_data){
         if (data.size() > data_max_items){
             if (verbose){
@@ -31,7 +29,7 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
             use_data = false;
         }
     }
-#endif
+
 
     // compute triangle bbox in world and grid
     const AABox<vec3> t_bbox_world = computeBoundingBox(t.v0, t.v1, t.v2);
@@ -123,15 +121,12 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
                 if (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
                 size_t idx = nfilled++;
                 if (COUNT_ONLY == 0){
-#ifdef BINARY_VOXELIZATION
+
                     if (use_data){
                     //    data.push_back(index);
                         data[idx] = index;
                     }
-#else
-                    //data.push_back(VoxelData(index, t.normal, average3Vec(t.v0_color, t.v1_color, t.v2_color))); // we ignore data limits for colored voxelization
-                    data[idx] = VoxelData(index, t.normal, average3Vec(t.v0_color, t.v1_color, t.v2_color));
-#endif
+
                 }
                 voxels[index - morton_start] = FULL_VOXEL;
 
@@ -144,12 +139,9 @@ void voxelize_triangle(const Triangle &t,const uint64_t morton_start, const uint
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
-#ifdef BINARY_VOXELIZATION
 void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
-#else
-void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<VoxelData> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
-#endif
-	vox_algo_timer.start();
+
+    vox_algo_timer.start();
 	memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
 	data.clear();
 
@@ -159,15 +151,15 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 	mortonDecode(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
 
 	// compute maximum grow size for data array
-#ifdef BINARY_VOXELIZATION
-	size_t data_max_items;
+
+    size_t data_max_items;
 	if (use_data){
 		uint64_t max_bytes_data = (uint64_t) (((morton_end - morton_start)*sizeof(char)) * sparseness_limit);
 
 		data_max_items = max_bytes_data / sizeof(uint64_t);
 		data_max_items = max_bytes_data / sizeof(VoxelData);
 	}
-#endif
+
 
     // COMMON PROPERTIES FOR ALL TRIANGLES
     float unit_div = 1.0f / unitlength;
@@ -182,11 +174,8 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 #pragma omp parallel for
     for (int i=0; i<reader.triangles.size(); i++){
         Triangle t = reader.triangles[i];
-#ifdef BINARY_VOXELIZATION
+
         voxelize_triangle<1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-#else
-        voxelize_triangle<1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p );
-#endif
     }
 
     data.resize(nfilled);
@@ -196,11 +185,8 @@ void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start,
 #pragma omp parallel for
     for (int i=0; i<reader.triangles.size(); i++){
         Triangle t = reader.triangles[i];
-#ifdef BINARY_VOXELIZATION
         voxelize_triangle<0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-#else
-        voxelize_triangle<0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p );
-#endif
+
     }
     vox_algo_timer.stop();
 }
