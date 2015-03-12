@@ -4,7 +4,7 @@
 #include <sstream>
 #include "globals.h"
 #include <trip_tools.h>
-#include <TriReader.h>
+#include <TriReaderIter.h>
 #include <algorithm>
 
 #include "voxelizer.h"
@@ -304,13 +304,17 @@ int main(int argc, char *argv[]) {
 	float unitlength = (trip_info.mesh_bbox.max[0] - trip_info.mesh_bbox.min[0]) / (float)trip_info.gridsize;
 	uint64_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
-	char* voxels = new char[(size_t)morton_part]; // Storage for voxel on/off
+    tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
+    for (int i=0; i<morton_part; i++){
+        voxels[i] = EMPTY_VOXEL;
+    }
 #ifdef BINARY_VOXELIZATION
-	vector<uint64_t> data; // Dynamic storage for morton codes
+    tbb::concurrent_vector<uint64_t> data; // Dynamic storage for morton codes
 #else
-	vector<VoxelData> data; // Dynamic storage for voxel data
+    tbb::concurrent_vector<VoxelData> data; // Dynamic storage for voxel data
 #endif 
-	size_t nfilled = 0;
+    tbb::atomic<size_t> nfilled;
+    nfilled = 0;
 	vox_total_timer.stop(); // TIMING
 
 	svo_total_timer.start();
@@ -331,7 +335,10 @@ int main(int argc, char *argv[]) {
 		// open file to read triangles
 		vox_io_in_timer.start(); // TIMING
 		std::string part_data_filename = trip_info.base_filename + string("_") + val_to_string(i) + string(".tripdata");
-		TriReader reader = TriReader(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
+        vox_io_in_timer.start();
+        TriReaderIter reader = TriReaderIter(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
+        vox_io_in_timer.stop();
+
 		if (verbose) { cout << "  reading " << trip_info.part_tricounts[i] << " triangles from " << part_data_filename << endl; }
 		vox_io_in_timer.stop(); // TIMING
 		// voxelize partition
@@ -347,9 +354,13 @@ int main(int argc, char *argv[]) {
 #ifdef BINARY_VOXELIZATION
 		if (use_data){ // use array of morton codes to build the SVO
 			sort(data.begin(), data.end()); // sort morton codes
-			for (std::vector<uint64_t>::iterator it = data.begin(); it != data.end(); ++it){
-				builder.addVoxel(*it);
-			}
+//            for (tbb::concurrent_vector<uint64_t>::iterator it = data.begin(); it != data.end(); ++it){
+//				builder.addVoxel(*it);
+//			}
+            for (int i=0; i<data.size(); i++){
+                builder.addVoxel(data[i]);
+            }
+
 		}
 		else { // morton array overflowed : using slower way to build SVO
 			uint64_t morton_number;
@@ -362,7 +373,7 @@ int main(int argc, char *argv[]) {
 		}
 #else
 		sort(data.begin(), data.end()); // sort
-		for (std::vector<VoxelData>::iterator it = data.begin(); it != data.end(); ++it){
+        for (tbb::concurrent_vector<VoxelData>::iterator it = data.begin(); it != data.end(); ++it){
 			if (color == COLOR_FIXED){
 				it->color = fixed_color;
 			}

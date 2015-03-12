@@ -2,7 +2,9 @@
 #define VOXELIZER_H_
 
 #include <tri_tools.h>
-#include <TriReader.h>
+#include <TriReaderIter.h>
+#include <tbb/atomic.h>
+#include <tbb/concurrent_vector.h>
 #include "globals.h"
 #include "intersection.h"
 #include "morton.h"
@@ -14,6 +16,7 @@ using namespace std;
 
 #define EMPTY_VOXEL 0
 #define FULL_VOXEL 1
+#define WORKING_VOXEL 2
 
 #ifdef BINARY_VOXELIZATION
 void voxelize_huang_method(TriReader &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, bool* voxels, size_t &nfilled);
@@ -22,9 +25,9 @@ void voxelize_huang_method(TriReader &reader, const uint64_t morton_start, const
 #endif
 
 #ifdef BINARY_VOXELIZATION
-void voxelize_schwarz_method(TriReader &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, char* voxels, vector<uint64_t> &data, float sparseness_limit, bool &use_data, size_t &nfilled);
+void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<uint64_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
 #else
-void voxelize_schwarz_method(TriReader &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, char* voxels, vector<VoxelData> &data, float sparseness_limit, bool &use_data, size_t &nfilled);
+void voxelize_schwarz_method(TriReaderIter &reader, const uint64_t morton_start, const uint64_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<VoxelData> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
 #endif
 
 //#ifdef BINARY_VOXELIZATION

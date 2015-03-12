@@ -28,6 +28,10 @@ struct AABox {
 	T max;
 	AABox(): min(T()), max(T()){}
 	AABox(T min, T max): min(min), max(max){}
+    void clamp(const T &a, const T &b){
+
+
+    }
 };
 
 #ifdef BINARY_VOXELIZATION

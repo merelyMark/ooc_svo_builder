@@ -8,6 +8,7 @@ using namespace trimesh;
 
 // A class to read triangles from a .tridata file.
 class TriReader{
+protected:
 	size_t n_triangles;
 	size_t n_read; 
 	size_t n_served; 
@@ -22,13 +23,13 @@ class TriReader{
 public:
 	TriReader();
 	TriReader(const TriReader&);
-	TriReader(const std::string &filename, size_t n_triangles, size_t buffersize);
-	void getTriangle(Triangle& t);
-	Triangle getTriangle();
-	bool hasNext();
+    TriReader(const std::string &filename, size_t n_triangles, size_t buffersize);
+    virtual void getTriangle(Triangle& t);
+    virtual Triangle getTriangle();
+    virtual bool hasNext();
 	~TriReader();
 private:
-	void fillBuffer();
+    virtual void fillBuffer();
 };
 
 inline TriReader::TriReader(){
@@ -50,7 +51,7 @@ inline TriReader::TriReader(const std::string &filename, size_t n_triangles, siz
 
 inline Triangle TriReader::getTriangle(){
 	if(current_tri == buffersize){ // at end of buffer, refill it
-		fillBuffer();
+        TriReader::fillBuffer();
 		current_tri = 0;
 	}
 	Triangle t = buffer[current_tri]; // assign triangle from buffer

@@ -57,9 +57,13 @@ SET_TARGET_PROPERTIES(tri_convert_binary PROPERTIES
 
 TARGET_LINK_LIBRARIES ( svo_builder
   gomp
+tbb
+	tbbmalloc_proxy
 )
 TARGET_LINK_LIBRARIES ( svo_builder_binary
   gomp
+tbb
+	tbbmalloc_proxy
 )
 TARGET_LINK_LIBRARIES ( tri_convert
   ${Trimesh2_LIBRARY}
