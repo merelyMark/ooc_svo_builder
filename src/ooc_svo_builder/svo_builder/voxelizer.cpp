@@ -10,8 +10,7 @@ using namespace trimesh;
 #define Z 2
 
 
-
-template<char COUNT_ONLY>
+template<char COUNT_ONLY, char CUDA_PARALLEL>
 
 void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 
@@ -122,8 +121,10 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
                             if (COUNT_ONLY == 0){
 
                                 if (use_data){
-                                //    data.push_back(index);
-                                    data[idx] = index;
+                                    if (CUDA_PARALLEL == 0)
+                                        data.push_back(index);
+                                    else
+                                        data[idx] = index;
                                 }
 
                             }
@@ -136,6 +137,39 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
             }
         }
     }
+}
+
+void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+{
+    //this is
+#pragma omp parallel for
+    for (int i=0; i<reader.triangles.size(); i++){
+        Triangle t = reader.triangles[i];
+
+        voxelize_triangle<1,1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    }
+
+    data.resize(nfilled);
+    nfilled = 0;
+    memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
+
+#pragma omp parallel for
+    for (int i=0; i<reader.triangles.size(); i++){
+        Triangle t = reader.triangles[i];
+        voxelize_triangle<0,1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+
+    }
+
+}
+
+void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+{
+    for (int i=0; i<reader.triangles.size(); i++){
+        Triangle t = reader.triangles[i];
+        voxelize_triangle<0,0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+
+    }
+
 }
 
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
@@ -173,23 +207,8 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
 //    for (iter = reader.triangles.begin();
 //         iter != reader.triangles.end(); ++iter){
 
-#pragma omp parallel for
-    for (int i=0; i<reader.triangles.size(); i++){
-        Triangle t = reader.triangles[i];
-
-        voxelize_triangle<1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    }
-
-    data.resize(nfilled);
-    nfilled = 0;
-    memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
-
-#pragma omp parallel for
-    for (int i=0; i<reader.triangles.size(); i++){
-        Triangle t = reader.triangles[i];
-        voxelize_triangle<0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-
-    }
+    //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
     vox_algo_timer.stop();
 }
 
