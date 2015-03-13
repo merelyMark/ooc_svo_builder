@@ -180,6 +180,54 @@ void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort
 
 }
 
+void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+{
+    vector<Triangle> tris = reader.triangles;
+    float3 *v0, *v1, *v2;
+    v0 = new float3[tris.size()];
+    v1 = new float3[tris.size()];
+    v2 = new float3[tris.size()];
+
+    for (int i=0; i<tris.size(); i++){
+        v0[i].x = tris[i].v0[0];
+        v0[i].y = tris[i].v0[1];
+        v0[i].z = tris[i].v0[2];
+
+        v1[i].x = tris[i].v0[0];
+        v1[i].y = tris[i].v0[1];
+        v1[i].z = tris[i].v0[2];
+
+        v2[i].x = tris[i].v0[0];
+        v2[i].y = tris[i].v0[1];
+        v2[i].z = tris[i].v0[2];
+
+    }
+
+    float3 *d_v0, *d_v1, *d_v2;
+    cudaMalloc((void**)&d_v0, tris.size() * sizeof(float3));
+    cudaMalloc((void**)&d_v1, tris.size() * sizeof(float3));
+    cudaMalloc((void**)&d_v2, tris.size() * sizeof(float3));
+
+    uint3 p_bbox_grid_min, p_bbox_grid_max;
+    p_bbox_grid_min.x =  p_bbox_grid.min[0];
+    p_bbox_grid_min.y =  p_bbox_grid.min[1];
+    p_bbox_grid_min.z =  p_bbox_grid.min[2];
+    p_bbox_grid_max.x =  p_bbox_grid.max[0];
+    p_bbox_grid_max.y =  p_bbox_grid.max[1];
+    p_bbox_grid_max.z =  p_bbox_grid.max[2];
+
+    float3 cuda_delta_p;
+    cuda_delta_p.x = delta_p[0];
+    cuda_delta_p.y = delta_p[1];
+    cuda_delta_p.z = delta_p[2];
+
+    cudaRun(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid_min, p_bbox_grid_max, unit_div, cuda_delta_p, data_max_items, tris.size());
+
+    cudaFree(d_v0);
+    cudaFree(d_v1);
+    cudaFree(d_v2);
+}
+
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
@@ -216,7 +264,9 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
 //         iter != reader.triangles.end(); ++iter){
 
     //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    //runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+
     vox_algo_timer.stop();
 }
 

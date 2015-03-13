@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <limits.h>
 
-#define mort_t uint64_t
+typedef  unsigned long long int mort_t;
 using namespace std;
 
 mort_t mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z);
