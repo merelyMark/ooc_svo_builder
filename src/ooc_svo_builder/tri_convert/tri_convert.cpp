@@ -18,11 +18,8 @@ vec3 fixed_color = vec3(1.0f, 1.0f, 1.0f);
 
 void printInfo(){
 	cout << "-------------------------------------------------------------" << endl;
-#ifdef BINARY_VOXELIZATION
 	cout << "Tri Converter " << version << " - BINARY VOXELIZATION"<< endl;
-#else
-	cout << "Tri Converter " << version << " - GEOMETRY+NORMALS"<< endl;
-#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 	cout << "Windows ";
 #endif
@@ -82,10 +79,6 @@ int main(int argc, char *argv[]){
 	TriMesh *themesh = TriMesh::read(filename.c_str());
 	themesh->need_faces(); // unpack triangle strips so we have faces
 	themesh->need_bbox(); // compute the bounding box
-#ifndef BINARY_VOXELIZATION
-	themesh->need_normals(); // check if there are normals, and if not, recompute them
-	// TODO: Check for colors here, inform user about decision
-#endif
 	AABox<vec3> mesh_bbox = createMeshBBCube(themesh); // pad the mesh BBOX out to be a cube
 
 	// Moving mesh to origin
@@ -110,20 +103,6 @@ int main(int argc, char *argv[]){
 		t.v0 = themesh->vertices[themesh->faces[i][0]];
 		t.v1 = themesh->vertices[themesh->faces[i][1]];
 		t.v2 = themesh->vertices[themesh->faces[i][2]];
-#ifndef BINARY_VOXELIZATION
-		// COLLECT VERTEX COLORS
-		if(!themesh->colors.empty()){ // if this mesh has colors, we're going to use them
-			t.v0_color = themesh->colors[themesh->faces[i][0]];
-			t.v1_color = themesh->colors[themesh->faces[i][1]];
-			t.v2_color = themesh->colors[themesh->faces[i][2]];
-		} 
-		// COLLECT NORMALS
-		if(recompute_normals){
-			t.normal = computeFaceNormal(themesh,i); // recompute normals
-		} else {
-			t.normal = getShadingFaceNormal(themesh,i); // use mesh provided normals
-		}
-#endif
 		writeTriangle(tri_out,t);
 	}
 	cout << "done in " << timer.getTotalTimeSeconds() << " ms." << endl;
@@ -134,11 +113,7 @@ int main(int argc, char *argv[]){
 	tri_info.version = 1;
 	tri_info.mesh_bbox = mesh_bbox;
 	tri_info.n_triangles = themesh->faces.size();
-#ifdef BINARY_VOXELIZATION
 	tri_info.geometry_only = 1;
-#else
-	tri_info.geometry_only = 0;
-#endif
 	writeTriHeader(tri_header_out_name, tri_info);
 	tri_info.print();
 	cout << "Done." << endl;
