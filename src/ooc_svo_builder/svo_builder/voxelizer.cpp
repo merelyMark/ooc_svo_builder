@@ -86,51 +86,53 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
 
     for (int x = t_bbox_grid.min[0]; x <= t_bbox_grid.max[0]; x++){
         for (int y = t_bbox_grid.min[1]; y <= t_bbox_grid.max[1]; y++){
-            for (int z = t_bbox_grid.min[2]; z <= t_bbox_grid.max[2]; z++){
+            for (int z = t_bbox_grid.min[2]; z <= t_bbox_grid.max[2];){
 
                 const mort_t index = mortonEncode_LUT(z, y, x);
-                while(voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) == WORKING_VOXEL);
+                if (voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) != WORKING_VOXEL){
 
-                if (voxels[index - morton_start] == FULL_VOXEL){ continue; } // already marked, continue
+                    if (voxels[index - morton_start] != FULL_VOXEL){
+                        // TRIANGLE PLANE THROUGH BOX TEST
+                        const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
+                        const float nDOTp = n DOT p;
 
-                // TRIANGLE PLANE THROUGH BOX TEST
-                const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
-                const float nDOTp = n DOT p;
-                if ((nDOTp + d1) * (nDOTp + d2) > 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
+                        // PROJECTION TESTS
+                        // XY
+                        const vec2 p_xy = vec2(p[X], p[Y]);
+                        // YZ
+                        const vec2 p_yz = vec2(p[Y], p[Z]);
+                        // XZ
+                        const vec2 p_zx = vec2(p[Z], p[X]);
 
-                // PROJECTION TESTS
-                // XY
-                const vec2 p_xy = vec2(p[X], p[Y]);
-                if (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f){
-                    voxels[index - morton_start] = EMPTY_VOXEL;
-                    continue;
+                        if ((nDOTp + d1) * (nDOTp + d2) > 0.0f
+                                || (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f)
+                                || (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f)
+                                || (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f)
+                                || (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f)
+                                || (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f)
+                                || (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f)
+                                || (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f)
+                                || (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f)
+                                || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
+                                ){
+                            voxels[index - morton_start] = EMPTY_VOXEL;
+                        }
+                        else{
+                            size_t idx = nfilled++;
+                            if (COUNT_ONLY == 0){
+
+                                if (use_data){
+                                //    data.push_back(index);
+                                    data[idx] = index;
+                                }
+
+                            }
+                            voxels[index - morton_start] = FULL_VOXEL;
+                        }
+                    } // else, it's already marked, continue
+                    z++;
                 }
-                if (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                if (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
 
-                // YZ
-                const vec2 p_yz = vec2(p[Y], p[Z]);
-                if (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                if (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                if (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-
-                // XZ
-                const vec2 p_zx = vec2(p[Z], p[X]);
-                if (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                if (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                if (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f){ voxels[index - morton_start] = EMPTY_VOXEL; continue; }
-                size_t idx = nfilled++;
-                if (COUNT_ONLY == 0){
-
-                    if (use_data){
-                    //    data.push_back(index);
-                        data[idx] = index;
-                    }
-
-                }
-                voxels[index - morton_start] = FULL_VOXEL;
-
-                continue;
             }
         }
     }
