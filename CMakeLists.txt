@@ -89,6 +89,7 @@ SET(SVO_BUILDER_SRCS
   ./src/ooc_svo_builder/svo_builder/partitioner.cpp
   ./src/ooc_svo_builder/svo_builder/voxelizer.cpp
   ./src/ooc_svo_builder/svo_builder/cuda.cu
+  ./src/ooc_svo_builder/svo_builder/ErrorCheck.cpp
 )
 CUDA_ADD_EXECUTABLE (  svo_builder ${SVO_BUILDER_SRCS} )
 
