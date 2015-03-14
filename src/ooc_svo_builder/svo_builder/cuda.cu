@@ -137,8 +137,8 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
 //    for (int x = t_bbox_grid.min.x; x <= t_bbox_grid.max.x; x++){
 //        for (int y = t_bbox_grid.min.y; y <= t_bbox_grid.max.y; y++){
 //            for (int z = t_bbox_grid.min.z; z <= t_bbox_grid.max.z;){
-
-    for (int i=0; i<idx_cnt;){
+    int i = 0;
+    while (i < idx_cnt){
         const int z = t_bbox_grid.min.z + i / (bbox_size.y * bbox_size.x);
         const int rem = i % (bbox_size.y * bbox_size.x);
         const int y = t_bbox_grid.min.y + (rem / bbox_size.x);
@@ -150,47 +150,48 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
         if (atomicCAS(&voxels[index - morton_start], EMPTY_VOXEL, WORKING_VOXEL) != WORKING_VOXEL){
 
             if (voxels[index - morton_start] != FULL_VOXEL){
-                int idx = atomicInc(&nfilled[0], 1000000000);//nfilled++;
-                if (COUNT_ONLY == 0){
+                // TRIANGLE PLANE THROUGH BOX TEST
+                const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
+                const float nDOTp = dot(n , p);
 
-                    //if (use_data){
-                         data[idx] = index;
-                    //}
-                    voxels[index - morton_start] = FULL_VOXEL;
+                // PROJECTION TESTS
+                // XY
+                const float2 p_xy = make_float2(p.x, p.y);
+                // YZ
+                const float2 p_yz = make_float2(p.y, p.z);
+                // XZ
+                const float2 p_zx = make_float2(p.z, p.x);
 
+                if (((nDOTp + d1) * (nDOTp + d2) > 0.0f)
+                        || ((dot(n_xy_e0 , p_xy) + d_xy_e0) < 0.0f)
+                        || ((dot(n_xy_e1 , p_xy) + d_xy_e1) < 0.0f)
+                        || ((dot(n_xy_e2 , p_xy) + d_xy_e2) < 0.0f)
+                        || ((dot(n_yz_e0 , p_yz) + d_yz_e0) < 0.0f)
+                        || ((dot(n_yz_e1 , p_yz) + d_yz_e1) < 0.0f)
+                        || ((dot(n_yz_e2 , p_yz) + d_yz_e2) < 0.0f)
+                        || ((dot(n_zx_e0 , p_zx) + d_xz_e0) < 0.0f)
+                        || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
+                        || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
+                        ){
+                    //voxels[index - morton_start] = EMPTY_VOXEL;
+                    atomicExch(&voxels[index - morton_start], EMPTY_VOXEL);
                 }
                 else{
-                    // TRIANGLE PLANE THROUGH BOX TEST
-                    const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
-                    const float nDOTp = dot(n , p);
+                    int idx = atomicInc(&nfilled[0], 1000000);//nfilled++;
+                    if (COUNT_ONLY == 0){
 
-                    // PROJECTION TESTS
-                    // XY
-                    const float2 p_xy = make_float2(p.x, p.y);
-                    // YZ
-                    const float2 p_yz = make_float2(p.y, p.z);
-                    // XZ
-                    const float2 p_zx = make_float2(p.z, p.x);
+                        //if (use_data){
+                             data[idx] = index;
+                        //}
 
-                    if (((nDOTp + d1) * (nDOTp + d2) > 0.0f)
-                            || ((dot(n_xy_e0 , p_xy) + d_xy_e0) < 0.0f)
-                            || ((dot(n_xy_e1 , p_xy) + d_xy_e1) < 0.0f)
-                            || ((dot(n_xy_e2 , p_xy) + d_xy_e2) < 0.0f)
-                            || ((dot(n_yz_e0 , p_yz) + d_yz_e0) < 0.0f)
-                            || ((dot(n_yz_e1 , p_yz) + d_yz_e1) < 0.0f)
-                            || ((dot(n_yz_e2 , p_yz) + d_yz_e2) < 0.0f)
-                            || ((dot(n_zx_e0 , p_zx) + d_xz_e0) < 0.0f)
-                            || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
-                            || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
-                            ){
-                        voxels[index - morton_start] = EMPTY_VOXEL;
                     }
+                    //voxels[index - morton_start] = FULL_VOXEL;
+                    atomicExch(&voxels[index - morton_start], FULL_VOXEL);
                 }
 
             } // else, it's already marked, continue
             i++;
         }
-        __syncthreads();
     }
 
 }
@@ -233,7 +234,7 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint
     cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
     ec.chk("memory finished");
     //get count
-    voxelize<1><<<1024,512>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
+    voxelize<1><<<512,512>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
 
     cudaThreadSynchronize();
