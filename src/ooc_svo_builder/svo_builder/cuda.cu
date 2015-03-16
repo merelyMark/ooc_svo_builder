@@ -1,13 +1,88 @@
-
+#include <assert.h>
 #include <helper_math.h>
 #include "ErrorCheck.h"
 
+__constant__ u_int32_t c_morton256_x[256];
+__constant__ u_int32_t c_morton256_y[256];
+__constant__ u_int32_t c_morton256_z[256];
 
-typedef unsigned long long int uint64;
+
+extern "C"
+void cudaConstants(const uint *x, const uint *y, const uint *z)
+{
+    ErrorCheck ec;
+    ec.chk("setupConst start");
+    cudaMemcpyToSymbol(c_morton256_x, x, sizeof(u_int32_t)*256,0); ec.chk("setupConst: c_morton256_x");
+    cudaMemcpyToSymbol(c_morton256_y, y, sizeof(u_int32_t)*256,0); ec.chk("setupConst: c_morton256_y");
+    cudaMemcpyToSymbol(c_morton256_z, z, sizeof(u_int32_t)*256,0); ec.chk("setupConst: c_morton256_z");
+
+}
+
+typedef u_int64_t uint64;
 #define EMPTY_VOXEL 0
 #define FULL_VOXEL 1
 #define WORKING_VOXEL 2
 
+
+inline __device__ u_int64_t cuda_mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z){
+        u_int64_t answer = 0;
+    answer =	c_morton256_z[(z >> 16) & 0xFF ] |
+                c_morton256_y[(y >> 16) & 0xFF ] |
+                c_morton256_x[(x >> 16) & 0xFF ];
+    answer = answer << 48 |
+                c_morton256_z[(z >> 8) & 0xFF ] |
+                c_morton256_y[(y >> 8) & 0xFF ] |
+                c_morton256_x[(x >> 8) & 0xFF ];
+    answer = answer << 24 |
+                c_morton256_z[(z) & 0xFF ] |
+                c_morton256_y[(y) & 0xFF ] |
+                c_morton256_x[(x) & 0xFF ];
+    return answer;
+}
+/************************************************************
+ * From Bonsai treecode
+ * ********************************************************/
+static __host__ __device__ uint2 dilate3(int value) {
+  unsigned int x;
+  uint2 key;
+
+  // dilate first 10 bits
+
+  x = value & 0x03FF;
+  x = ((x << 16) + x) & 0xFF0000FF;
+  x = ((x <<  8) + x) & 0x0F00F00F;
+  x = ((x <<  4) + x) & 0xC30C30C3;
+  x = ((x <<  2) + x) & 0x49249249;
+  key.y = x;
+
+  // dilate second 10 bits
+
+  x = (value >> 10) & 0x03FF;
+  x = ((x << 16) + x) & 0xFF0000FF;
+  x = ((x <<  8) + x) & 0x0F00F00F;
+  x = ((x <<  4) + x) & 0xC30C30C3;
+  x = ((x <<  2) + x) & 0x49249249;
+  key.x = x;
+
+  return key;
+}
+
+//#if 0
+//Morton order
+static __host__  __device__ uint2 get_key_morton(int4 crd) {
+  uint2 key, key1;
+  key  = dilate3(crd.x);
+
+  key1 = dilate3(crd.y);
+  key.x = key.x | (key1.x << 1);
+  key.y = key.y | (key1.y << 1);
+
+  key1 = dilate3(crd.z);
+  key.x = key.x | (key1.x << 2);
+  key.y = key.y | (key1.y << 2);
+
+  return key;
+}
 
 //Let's go with magic bits instead of LUT
 // VERSION WITH MAGIC BITS
@@ -28,6 +103,15 @@ uint64 mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z){
         uint64 answer = 0;
         answer |= splitBy3(x) | splitBy3(y) << 1 | splitBy3(z) << 2;
         return answer;
+}
+
+__device__
+uint64 cuda_mortonEncode_for(unsigned int x, unsigned int y, unsigned int z){
+        uint64 answer = 0;
+        for (uint64 i = 0; i < (sizeof(int) * CHAR_BIT); ++i) {
+                answer |= ((x & ((uint64)1 << i)) << 2*i) | ((y & ((uint64)1 << i)) << (2*i + 1)) | ((z & ((uint64)1 << i)) << (2*i + 2));
+    }
+    return answer;
 }
 
 template <typename T>
@@ -64,6 +148,8 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
                        const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items)
 
 {
+
+
     // read triangle
 
 
@@ -91,6 +177,7 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
             d_clampval<int>(grid_max.y, p_bbox_grid_min.y, p_bbox_grid_max.y),
             d_clampval<int>(grid_max.z, p_bbox_grid_min.z, p_bbox_grid_max.z));
     const CAABox<int3> t_bbox_grid = make_CAABox<int3>(clamp_grid_min, clamp_grid_max);
+
 
     // COMMON PROPERTIES FOR THE TRIANGLE
     const float3 e0 = v1 - v0;
@@ -134,66 +221,54 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
     const int3 bbox_size = make_int3((t_bbox_grid.max.x - t_bbox_grid.min.x + 1), (t_bbox_grid.max.y - t_bbox_grid.min.y + 1), (t_bbox_grid.max.z - t_bbox_grid.min.z + 1));
 
     const int idx_cnt =  bbox_size.x * bbox_size.y * bbox_size.z;
-//    for (int x = t_bbox_grid.min.x; x <= t_bbox_grid.max.x; x++){
-//        for (int y = t_bbox_grid.min.y; y <= t_bbox_grid.max.y; y++){
-//            for (int z = t_bbox_grid.min.z; z <= t_bbox_grid.max.z;){
-    int i = 0;
-    while (i < idx_cnt){
+
+    for (int i=0; i<idx_cnt; i++){
         const int z = t_bbox_grid.min.z + i / (bbox_size.y * bbox_size.x);
         const int rem = i % (bbox_size.y * bbox_size.x);
         const int y = t_bbox_grid.min.y + (rem / bbox_size.x);
         const int x = t_bbox_grid.min.x + (rem % bbox_size.x);
 
-        const uint64 index = mortonEncode_magicbits(z, y, x);
-        //if (voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) != WORKING_VOXEL){
+        //const uint64 index = mortonEncode_magicbits(z, y, x);
+        const uint64 index = cuda_mortonEncode_LUT(x,y,z);
+        // TRIANGLE PLANE THROUGH BOX TEST
+        const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
+        const float nDOTp = dot(n , p);
 
-        if (atomicCAS(&voxels[index - morton_start], EMPTY_VOXEL, WORKING_VOXEL) != WORKING_VOXEL){
+        // PROJECTION TESTS
+        // XY
+        const float2 p_xy = make_float2(p.x, p.y);
+        // YZ
+        const float2 p_yz = make_float2(p.y, p.z);
+        // XZ
+        const float2 p_zx = make_float2(p.z, p.x);
 
-            if (voxels[index - morton_start] != FULL_VOXEL){
-                // TRIANGLE PLANE THROUGH BOX TEST
-                const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
-                const float nDOTp = dot(n , p);
-
-                // PROJECTION TESTS
-                // XY
-                const float2 p_xy = make_float2(p.x, p.y);
-                // YZ
-                const float2 p_yz = make_float2(p.y, p.z);
-                // XZ
-                const float2 p_zx = make_float2(p.z, p.x);
-
-                if (((nDOTp + d1) * (nDOTp + d2) > 0.0f)
-                        || ((dot(n_xy_e0 , p_xy) + d_xy_e0) < 0.0f)
-                        || ((dot(n_xy_e1 , p_xy) + d_xy_e1) < 0.0f)
-                        || ((dot(n_xy_e2 , p_xy) + d_xy_e2) < 0.0f)
-                        || ((dot(n_yz_e0 , p_yz) + d_yz_e0) < 0.0f)
-                        || ((dot(n_yz_e1 , p_yz) + d_yz_e1) < 0.0f)
-                        || ((dot(n_yz_e2 , p_yz) + d_yz_e2) < 0.0f)
-                        || ((dot(n_zx_e0 , p_zx) + d_xz_e0) < 0.0f)
-                        || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
-                        || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
-                        ){
-                    //voxels[index - morton_start] = EMPTY_VOXEL;
-                    atomicExch(&voxels[index - morton_start], EMPTY_VOXEL);
-                }
-                else{
-                    int idx = atomicInc(&nfilled[0], 1000000);//nfilled++;
+        if (voxels[index - morton_start] == EMPTY_VOXEL){
+            if (!(((nDOTp + d1) * (nDOTp + d2) > 0.0f)
+                    || ((dot(n_xy_e0 , p_xy) + d_xy_e0) < 0.0f)
+                    || ((dot(n_xy_e1 , p_xy) + d_xy_e1) < 0.0f)
+                    || ((dot(n_xy_e2 , p_xy) + d_xy_e2) < 0.0f)
+                    || ((dot(n_yz_e0 , p_yz) + d_yz_e0) < 0.0f)
+                    || ((dot(n_yz_e1 , p_yz) + d_yz_e1) < 0.0f)
+                    || ((dot(n_yz_e2 , p_yz) + d_yz_e2) < 0.0f)
+                    || ((dot(n_zx_e0 , p_zx) + d_xz_e0) < 0.0f)
+                    || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
+                    || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
+                    )){
+                if (atomicCAS(&voxels[index - morton_start], EMPTY_VOXEL, FULL_VOXEL) == EMPTY_VOXEL){
+                    int idx = atomicInc(&nfilled[0], 100000000);//nfilled++;
                     if (COUNT_ONLY == 0){
 
                         //if (use_data){
-                             data[idx] = index;
+                             data[idx] = 1;
                         //}
 
                     }
-                    //voxels[index - morton_start] = FULL_VOXEL;
-                    atomicExch(&voxels[index - morton_start], FULL_VOXEL);
                 }
-
-            } // else, it's already marked, continue
-            i++;
+                voxels[index - morton_start] = FULL_VOXEL;
+            }
         }
+        __syncthreads();
     }
-
 }
 
 template<char COUNT_ONLY>
@@ -202,10 +277,15 @@ void voxelize(const float3 *v0, const float3 *v1, const float3 *v2,const uint64 
                const uint3 p_bbox_grid_min, const uint3 p_bbox_grid_max, const float unit_div, const float3 delta_p,	size_t data_max_items, size_t num_triangles)
 {
     int idx = threadIdx.x + blockDim.x * blockIdx.x;
-    if (idx < num_triangles){
-        voxelize_triangle<COUNT_ONLY>(v0[idx],v1[idx], v2[idx], morton_start, morton_end, unitlength, voxels, data, sparseness_limit, nfilled,
-                          p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items);
-    }
+//    if (idx < num_triangles){
+//        voxelize_triangle<COUNT_ONLY>(v0[idx],v1[idx], v2[idx], morton_start, morton_end, unitlength, voxels, data, sparseness_limit, nfilled,
+//                          p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items);
+//    }
+    const int z = idx / (128*128);
+    const int rem = idx % (128*128);
+    const int y = (rem / 128);
+    const int x = (rem % 128);
+    data[idx] = cuda_mortonEncode_for(x,y,z);
 }
 
 
@@ -222,32 +302,34 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint
 
     h_voxels = new int[morton_end - morton_start];
 
-    uint64 *d_data, *h_data;
+    uint64 *d_data;
     cudaMalloc( (void**) &d_data, sizeof(uint64)*data.size());     ec.chk("data malloc");
 
-    h_data = new uint64[data.size()];
+    uint64 *h_data = new uint64[data.size()];
 
     uint *d_nfilled;
     cudaMalloc( (void**) &d_nfilled, sizeof(uint));     ec.chk("nfilled malloc");
 
     cudaMemset(d_nfilled,0, sizeof(uint));
     cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
+    cudaMemset(d_data, 0, sizeof(uint64)*data.size());
     ec.chk("memory finished");
     //get count
-    voxelize<1><<<512,512>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
+    voxelize<1><<<8192,32>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
 
     cudaThreadSynchronize();
     ec.chk("voxelize done" );
     uint h_nfilled = 0;
     cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
-    nfilled = h_nfilled;
-    cudaMemcpy(h_voxels, d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
-    for (int i=0; i<(morton_end - morton_start); i++){
-        voxels[i] = (char)h_voxels[i];
-    }
+    //nfilled = h_nfilled;
+//    cudaMemcpy(h_voxels, d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
+//    for (int i=0; i<(morton_end - morton_start); i++){
+//        voxels[i] = (char)h_voxels[i];
+//    }
 
     cudaMemcpy(h_data, d_data, data.size()*sizeof(uint64), cudaMemcpyDeviceToHost);
+    cudaThreadSynchronize();
     for (int i=0; i<data.size(); i++){
         data[i] = h_data[i];
     }

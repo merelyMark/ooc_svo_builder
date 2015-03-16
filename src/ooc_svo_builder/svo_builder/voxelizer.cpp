@@ -1,6 +1,8 @@
 #include "voxelizer.h"
 #include <tbb/atomic.h>
 #include <omp.h>
+#include <typeinfo>
+#include <nmmintrin.h>
 
 using namespace std;
 using namespace trimesh;
@@ -10,14 +12,62 @@ using namespace trimesh;
 #define Z 2
 
 
-template<char COUNT_ONLY, char CUDA_PARALLEL>
 
-void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+/************************************************************
+ * From Bonsai treecode
+ * ********************************************************/
+uint2 cpu_dilate3(int value) {
+  unsigned int x;
+  uint2 key;
+
+  // dilate first 10 bits
+
+  x = value & 0x03FF;
+  x = ((x << 16) + x) & 0xFF0000FF;
+  x = ((x <<  8) + x) & 0x0F00F00F;
+  x = ((x <<  4) + x) & 0xC30C30C3;
+  x = ((x <<  2) + x) & 0x49249249;
+  key.y = x;
+
+  // dilate second 10 bits
+
+  x = (value >> 10) & 0x03FF;
+  x = ((x << 16) + x) & 0xFF0000FF;
+  x = ((x <<  8) + x) & 0x0F00F00F;
+  x = ((x <<  4) + x) & 0xC30C30C3;
+  x = ((x <<  2) + x) & 0x49249249;
+  key.x = x;
+
+  return key;
+}
+
+//#if 0
+//Morton order
+ uint2 cpu_get_key_morton(int4 crd) {
+  uint2 key, key1;
+  key  = cpu_dilate3(crd.x);
+
+  key1 = cpu_dilate3(crd.y);
+  key.x = key.x | (key1.x << 1);
+  key.y = key.y | (key1.y << 1);
+
+  key1 = cpu_dilate3(crd.z);
+  key.x = key.x | (key1.x << 2);
+  key.y = key.y | (key1.y << 2);
+
+  return key;
+}
+
+ template<char COUNT_ONLY, char CUDA_PARALLEL>
+
+void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items, int tid = 0)
 
 {
     // read triangle
 
-
+    vec3 v0 = t.v0;
+    vec3 v1 = t.v1;
+    vec3 v2 = t.v2;
 
     if (use_data){
         if (data.size() > data_max_items){
@@ -44,24 +94,25 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
     const AABox<ivec3> t_bbox_grid(clamp_grid_min, clamp_grid_max);
 
     // COMMON PROPERTIES FOR THE TRIANGLE
-    const vec3 e0 = t.v1 - t.v0;
-    const vec3 e1 = t.v2 - t.v1;
-    const vec3 e2 = t.v0 - t.v2;
-    vec3 to_normalize = (e0)CROSS(e1);
+    const vec3 e0 = v1 - v0;
+    const vec3 e1 = v2 - v1;
+    const vec3 e2 = v0 - v2;
+    vec3 to_normalize = e0 CROSS e1;
     const vec3 n = normalize(to_normalize); // triangle normal
     // PLANE TEST PROPERTIES
     const vec3 c = vec3(n[X] > 0 ? unitlength : 0.0f,
                         n[Y] > 0 ? unitlength : 0.0f,
                         n[Z] > 0 ? unitlength : 0.0f); // critical point
-    const float d1 = n DOT(c - t.v0);
-    const float d2 = n DOT((delta_p - c) - t.v0);
+    const float d1 = n DOT(c - v0);
+    const float d2 = n DOT((delta_p - c) - v0);
+
     // PROJECTION TEST PROPERTIES
     // XY plane
     const vec2 n_xy_e0 = n[Z] < 0.0f ? -1.0f * vec2(-1.0f*e0[Y], e0[X]) : vec2(-1.0f*e0[Y], e0[X]);
     const vec2 n_xy_e1 = n[Z] < 0.0f ? -1.0f * vec2(-1.0f*e1[Y], e1[X]) : vec2(-1.0f*e1[Y], e1[X]);
     const vec2 n_xy_e2 = n[Z] < 0.0f ? -1.0f * vec2(-1.0f*e2[Y], e2[X]) : vec2(-1.0f*e2[Y], e2[X]);
 
-    const float d_xy_e0 = (-1.0f * (n_xy_e0 DOT vec2(t.v0[X], t.v0[Y]))) + max(0.0f, unitlength*n_xy_e0[0]) + max(0.0f, unitlength*n_xy_e0[1]);
+    const float d_xy_e0 = (-1.0f * (n_xy_e0 DOT vec2(v0[X], v0[Y]))) + max(0.0f, unitlength*n_xy_e0[0]) + max(0.0f, unitlength*n_xy_e0[1]);
     const float d_xy_e1 = (-1.0f * (n_xy_e1 DOT vec2(t.v1[X], t.v1[Y]))) + max(0.0f, unitlength*n_xy_e1[0]) + max(0.0f, unitlength*n_xy_e1[1]);
     const float d_xy_e2 = (-1.0f * (n_xy_e2 DOT vec2(t.v2[X], t.v2[Y]))) + max(0.0f, unitlength*n_xy_e2[0]) + max(0.0f, unitlength*n_xy_e2[1]);
     // YZ plane
@@ -84,66 +135,51 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
     // test possible grid boxes for overlap
     const ivec3 bbox_size((t_bbox_grid.max[0] - t_bbox_grid.min[0] + 1), (t_bbox_grid.max[1] - t_bbox_grid.min[1] + 1), (t_bbox_grid.max[2] - t_bbox_grid.min[2] + 1));
 
-    const int idx_cnt =  bbox_size[0] * bbox_size[1] * bbox_size[2];
-//    for (int x = t_bbox_grid.min[0]; x <= t_bbox_grid.max[0]; x++){
-//        for (int y = t_bbox_grid.min[1]; y <= t_bbox_grid.max[1]; y++){
-//            for (int z = t_bbox_grid.min[2]; z <= t_bbox_grid.max[2];){
-    for (int i=0; i<idx_cnt;){
-        const int z = t_bbox_grid.min[2] + i / (bbox_size[1] * bbox_size[0]);
-        const int rem = i % (bbox_size[1] * bbox_size[0]);
-        const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
-        const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
-
+    //const int idx_cnt =  bbox_size[0] * bbox_size[1] * bbox_size[2];
+    for (int x=t_bbox_grid.min[0]; x<t_bbox_grid.max[0]+1; x++){
+    for (int y=t_bbox_grid.min[1]; y<t_bbox_grid.max[1]+1; y++){
+    for (int z=t_bbox_grid.min[2]; z<t_bbox_grid.max[2]+1; z++){
+//        const int z = t_bbox_grid.min[2] + i / (bbox_size[1] * bbox_size[0]);
+//        const int rem = i % (bbox_size[1] * bbox_size[0]);
+//        const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
+//        const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
         const mort_t index = mortonEncode_LUT(z, y, x);
-        if (voxels[index - morton_start].compare_and_swap(WORKING_VOXEL, EMPTY_VOXEL) != WORKING_VOXEL){
+        // TRIANGLE PLANE THROUGH BOX TEST
+        const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
+        const float nDOTp = n DOT p;
 
-            if (voxels[index - morton_start] != FULL_VOXEL){
-                // TRIANGLE PLANE THROUGH BOX TEST
-                const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
-                const float nDOTp = n DOT p;
+        // PROJECTION TESTS
+        // XY
+        const vec2 p_xy = vec2(p[X], p[Y]);
+        // YZ
+        const vec2 p_yz = vec2(p[Y], p[Z]);
+        // XZ
+        const vec2 p_zx = vec2(p[Z], p[X]);
 
-                // PROJECTION TESTS
-                // XY
-                const vec2 p_xy = vec2(p[X], p[Y]);
-                // YZ
-                const vec2 p_yz = vec2(p[Y], p[Z]);
-                // XZ
-                const vec2 p_zx = vec2(p[Z], p[X]);
-
-                if ((nDOTp + d1) * (nDOTp + d2) > 0.0f
-                        || (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f)
-                        || (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f)
-                        || (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f)
-                        || (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f)
-                        || (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f)
-                        || (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f)
-                        || (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f)
-                        || (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f)
-                        || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
-                        ){
-                    voxels[index - morton_start] = EMPTY_VOXEL;
-                }
-                else{
-                    size_t idx = nfilled++;
-                    if (COUNT_ONLY == 0){
-
-                        if (use_data){
-                            if (CUDA_PARALLEL == 0)
-                                data.push_back(index);
-                            else
-                                data[idx] = index;
-                        }
-
+        if (!((nDOTp + d1) * (nDOTp + d2) > 0.0f
+                || (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f)
+                || (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f)
+                || (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f)
+                || (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f)
+                || (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f)
+                || (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f)
+                || (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f)
+                || (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f)
+                || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
+                )){
+            if (COUNT_ONLY == 0){
+                if (use_data){
+                    if (voxels[index - morton_start].compare_and_swap(FULL_VOXEL, EMPTY_VOXEL) == EMPTY_VOXEL){
+                        nfilled++;
+                        data.push_back(index);
                     }
-                    voxels[index - morton_start] = FULL_VOXEL;
                 }
-            } // else, it's already marked, continue
-            i++;
+
+            }
         }
     }
-//            }
-//        }
-//    }
+    }
+    }
 }
 
 void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
@@ -175,9 +211,7 @@ void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort
     for (int i=0; i<reader.triangles.size(); i++){
         Triangle t = reader.triangles[i];
         voxelize_triangle<0,0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-
     }
-
 }
 
 void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
@@ -264,8 +298,8 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
 //         iter != reader.triangles.end(); ++iter){
 
     //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    //runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    //runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     vox_algo_timer.stop();
 }

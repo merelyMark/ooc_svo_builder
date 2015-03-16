@@ -346,7 +346,7 @@ int main(int argc, char *argv[]) {
 	svo_total_timer.start(); svo_algo_timer.start(); // TIMING
 	builder.finalizeTree(); // finalize SVO so it gets written to disk
 	cout << "done" << endl;
-    cout << "Total amount of voxels: " << nfilled << " " << data.size() << endl;
+    cout << "Total amount of voxels: " << nfilled << endl;
 	svo_total_timer.stop(); svo_algo_timer.stop(); // TIMING
 
 	// Removing .trip files which are left by partitioner
