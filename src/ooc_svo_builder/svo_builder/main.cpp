@@ -6,6 +6,7 @@
 #include <trip_tools.h>
 #include <TriReaderIter.h>
 #include <algorithm>
+#include <tbb/parallel_sort.h>
 
 #include "voxelizer.h"
 #include "OctreeBuilder.h"
@@ -292,7 +293,7 @@ int main(int argc, char *argv[]) {
 	svo_total_timer.stop();
 
 	// Start voxelisation and SVO building per partition
-	for (size_t i = 0; i < trip_info.n_partitions; i++) {
+    for (size_t i = 0; i < trip_info.n_partitions; i++) {
 		if (trip_info.part_tricounts[i] == 0) { continue; } // skip partition if it contains no triangles
 
 		// VOXELIZATION
@@ -322,7 +323,8 @@ int main(int argc, char *argv[]) {
 		svo_total_timer.start(); svo_algo_timer.start(); // TIMING
 
         if (use_data){ // use array of morton codes to build the SVO
-			sort(data.begin(), data.end()); // sort morton codes
+            tbb::parallel_sort(data.begin(), data.end()); // sort morton codes
+            //sort(data.begin(), data.end());
 //            for (tbb::concurrent_vector<mort_t>::iterator it = data.begin(); it != data.end(); ++it){
 //				builder.addVoxel(*it);
 //			}

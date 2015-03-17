@@ -11,7 +11,10 @@ using namespace trimesh;
 #define Y 1
 #define Z 2
 
-
+typedef union{
+    uint2 u2;
+    mort_t l;
+} cpu_uint64;
 
 /************************************************************
  * From Bonsai treecode
@@ -27,7 +30,7 @@ uint2 cpu_dilate3(int value) {
   x = ((x <<  8) + x) & 0x0F00F00F;
   x = ((x <<  4) + x) & 0xC30C30C3;
   x = ((x <<  2) + x) & 0x49249249;
-  key.y = x;
+  key.x = x;
 
   // dilate second 10 bits
 
@@ -36,24 +39,24 @@ uint2 cpu_dilate3(int value) {
   x = ((x <<  8) + x) & 0x0F00F00F;
   x = ((x <<  4) + x) & 0xC30C30C3;
   x = ((x <<  2) + x) & 0x49249249;
-  key.x = x;
+  key.y = x;
 
   return key;
 }
 
 //#if 0
 //Morton order
- uint2 cpu_get_key_morton(int4 crd) {
-  uint2 key, key1;
-  key  = cpu_dilate3(crd.x);
+ cpu_uint64 cpu_get_key_morton(int4 crd) {
+  cpu_uint64 key, key1;
+  key.u2  = cpu_dilate3(crd.x);
 
-  key1 = cpu_dilate3(crd.y);
-  key.x = key.x | (key1.x << 1);
-  key.y = key.y | (key1.y << 1);
+  key1.u2 = cpu_dilate3(crd.y);
+  key.u2.x = key.u2.x | (key1.u2.x << 1);
+  key.u2.y = key.u2.y | (key1.u2.y << 1);
 
-  key1 = cpu_dilate3(crd.z);
-  key.x = key.x | (key1.x << 2);
-  key.y = key.y | (key1.y << 2);
+  key1.u2 = cpu_dilate3(crd.z);
+  key.u2.x = key.u2.x | (key1.u2.x << 2);
+  key.u2.y = key.u2.y | (key1.u2.y << 2);
 
   return key;
 }
@@ -135,15 +138,26 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
     // test possible grid boxes for overlap
     const ivec3 bbox_size((t_bbox_grid.max[0] - t_bbox_grid.min[0] + 1), (t_bbox_grid.max[1] - t_bbox_grid.min[1] + 1), (t_bbox_grid.max[2] - t_bbox_grid.min[2] + 1));
 
-    //const int idx_cnt =  bbox_size[0] * bbox_size[1] * bbox_size[2];
-    for (int x=t_bbox_grid.min[0]; x<t_bbox_grid.max[0]+1; x++){
-    for (int y=t_bbox_grid.min[1]; y<t_bbox_grid.max[1]+1; y++){
-    for (int z=t_bbox_grid.min[2]; z<t_bbox_grid.max[2]+1; z++){
-//        const int z = t_bbox_grid.min[2] + i / (bbox_size[1] * bbox_size[0]);
-//        const int rem = i % (bbox_size[1] * bbox_size[0]);
-//        const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
-//        const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
-        const mort_t index = mortonEncode_LUT(z, y, x);
+#if 0
+    const int z = t_bbox_grid.min[2];
+    const int y = t_bbox_grid.min[1];
+    const int x = t_bbox_grid.min[0];
+    const cpu_uint64 index = cpu_get_key_morton(make_int4(x,y,z,0));//mortonEncode_LUT(z, y, x);
+    nfilled++;
+    data.push_back(index.l);
+
+#else
+//    for (int x=t_bbox_grid.min[0]; x<t_bbox_grid.max[0]+1; x++){
+//    for (int y=t_bbox_grid.min[1]; y<t_bbox_grid.max[1]+1; y++){
+//    for (int z=t_bbox_grid.min[2]; z<t_bbox_grid.max[2]+1; z++){
+    const int idx_cnt =  bbox_size[0] * bbox_size[1] * bbox_size[2];
+    for (int i=0; i<idx_cnt; i++){
+        const int z = t_bbox_grid.min[2] + i / (bbox_size[1] * bbox_size[0]);
+        const int rem = i % (bbox_size[1] * bbox_size[0]);
+        const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
+        const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
+        const cpu_uint64 index = cpu_get_key_morton(make_int4(x,y,z,0));//mortonEncode_LUT(z, y, x);
+        assert(index.l < morton_end);
         // TRIANGLE PLANE THROUGH BOX TEST
         const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
         const float nDOTp = n DOT p;
@@ -168,18 +182,19 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
                 || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
                 )){
             if (COUNT_ONLY == 0){
-                if (use_data){
-                    if (voxels[index - morton_start].compare_and_swap(FULL_VOXEL, EMPTY_VOXEL) == EMPTY_VOXEL){
+                if (voxels[index.l - morton_start].compare_and_swap(FULL_VOXEL, EMPTY_VOXEL) == EMPTY_VOXEL){
+                    if (use_data){
                         nfilled++;
-                        data.push_back(index);
+                        data.push_back(index.l);
                     }
                 }
-
             }
         }
+//    }
+//    }
+//    }
     }
-    }
-    }
+#endif
 }
 
 void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
@@ -207,10 +222,16 @@ void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mor
 
 void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 {
-#pragma omp parallel for
+//#pragma omp parallel for
     for (int i=0; i<reader.triangles.size(); i++){
         Triangle t = reader.triangles[i];
         voxelize_triangle<0,0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+//        const int z = i / (128*128);
+//        const int rem = i % (128*128);
+//        const int y = (rem / 128);
+//        const int x = (rem % 128);
+//        data.push_back(mortonEncode_for(x,y,z));
+
     }
 }
 
@@ -241,6 +262,10 @@ void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t mort
     cudaMalloc((void**)&d_v0, tris.size() * sizeof(float3));
     cudaMalloc((void**)&d_v1, tris.size() * sizeof(float3));
     cudaMalloc((void**)&d_v2, tris.size() * sizeof(float3));
+
+    cudaMemcpy(d_v0, v0, sizeof(float3)*tris.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_v1, v1, sizeof(float3)*tris.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_v2, v2, sizeof(float3)*tris.size(), cudaMemcpyHostToDevice);
 
     uint3 p_bbox_grid_min, p_bbox_grid_max;
     p_bbox_grid_min.x =  p_bbox_grid.min[0];
@@ -299,7 +324,7 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
 
     //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
     runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    //runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     vox_algo_timer.stop();
 }
