@@ -49,6 +49,10 @@ Timer svo_total_timer;
 Timer svo_io_out_timer;
 Timer svo_algo_timer;
 
+
+extern "C"
+void cudaConstants(const uint *x, const uint *y, const uint *z);
+
 void printInfo() {
 	cout << "--------------------------------------------------------------------" << endl;
 
@@ -292,6 +296,7 @@ int main(int argc, char *argv[]) {
 	OctreeBuilder builder = OctreeBuilder(trip_info.base_filename, trip_info.gridsize, generate_levels);
 	svo_total_timer.stop();
 
+    cudaConstants(morton256_x, morton256_y, morton256_z);
 	// Start voxelisation and SVO building per partition
     for (size_t i = 0; i < trip_info.n_partitions; i++) {
 		if (trip_info.part_tricounts[i] == 0) { continue; } // skip partition if it contains no triangles

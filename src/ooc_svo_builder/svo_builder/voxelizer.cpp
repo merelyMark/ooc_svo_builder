@@ -168,7 +168,7 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
         const int rem = i % (bbox_size[1] * bbox_size[0]);
         const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
         const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
-        const cpu_uint64 index = cpu_get_key_morton(make_int4(z,y,x,0));//mortonEncode_LUT(z, y, x);
+        const uint64 index = mortonEncode_LUT(z, y, x);
         assert(index.l < morton_end);
         // TRIANGLE PLANE THROUGH BOX TEST
         const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
@@ -194,10 +194,10 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
                 || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
                 )){
             if (COUNT_ONLY == 0){
-                if (compare_and_swap(voxels, index.l - morton_start)){
+                if (compare_and_swap(voxels, index - morton_start)){
                     if (use_data){
                         nfilled++;
-                        data.push_back(index.l);
+                        data.push_back(index);
                     }
                 }
             }

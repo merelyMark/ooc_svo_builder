@@ -330,7 +330,7 @@ void voxelize_schwarz_method(TriReaderIter *reader, const mort_t morton_start, c
     // COMMON PROPERTIES FOR ALL TRIANGLES
     float unit_div = 1.0f / unitlength;
     vec3 delta_p = vec3(unitlength, unitlength, unitlength);
-    if (reader->triangles.size() > 2000)
+
     runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     vox_algo_timer.stop();

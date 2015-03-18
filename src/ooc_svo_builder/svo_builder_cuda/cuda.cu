@@ -30,53 +30,37 @@ void cudaConstants(const uint *x, const uint *y, const uint *z)
 #define WORKING_VOXEL 2
 
 
-/************************************************************
- * From Bonsai treecode
- * ********************************************************/
-static __host__ __device__ uint2 dilate3(int value) {
-  unsigned int x;
-  uint2 key;
-
-  // dilate first 10 bits
-
-  x = value & 0x03FF;
-  x = ((x << 16) + x) & 0xFF0000FF;
-  x = ((x <<  8) + x) & 0x0F00F00F;
-  x = ((x <<  4) + x) & 0xC30C30C3;
-  x = ((x <<  2) + x) & 0x49249249;
-  key.x = x;
-
-  // dilate second 10 bits
-
-  x = (value >> 10) & 0x03FF;
-  x = ((x << 16) + x) & 0xFF0000FF;
-  x = ((x <<  8) + x) & 0x0F00F00F;
-  x = ((x <<  4) + x) & 0xC30C30C3;
-  x = ((x <<  2) + x) & 0x49249249;
-  key.y = x;
-
-  return key;
+__device__ u_int64_t cuda_splitBy3(int a){
+        u_int64_t x = a & 0x1fffff;
+    x = (x | x << 32) & 0x1f00000000ffff;
+    x = (x | x << 16) & 0x1f0000ff0000ff;
+    x = (x | x << 8) & 0x100f00f00f00f00f;
+    x = (x | x << 4) & 0x10c30c30c30c30c3;
+    x = (x | x << 2) & 0x1249249249249249;
+    return x;
 }
 
-//#if 0
-//Morton order
-static __host__  __device__ _uint64 get_key_morton(int4 crd) {
-  _uint64 key, key1;
-  key.u2  = dilate3(crd.x);
-
-  key1.u2 = dilate3(crd.y);
-  key.u2.x = key.u2.x | (key1.u2.x << 1);
-  key.u2.y = key.u2.y | (key1.u2.y << 1);
-
-  key1.u2 = dilate3(crd.z);
-  key.u2.x = key.u2.x | (key1.u2.x << 2);
-  key.u2.y = key.u2.y | (key1.u2.y << 2);
-
-  return key;
+__device__ u_int64_t cuda_mortonEncode_magicbits(unsigned int x, unsigned int y, unsigned int z){
+        u_int64_t answer = 0;
+    answer |= cuda_splitBy3(x) | cuda_splitBy3(y) << 1 | cuda_splitBy3(z) << 2;
+    return answer;
 }
 
-
-
+__device__ u_int64_t cuda_mortonEncode_LUT(unsigned int x, unsigned int y, unsigned int z){
+        u_int64_t answer = 0;
+    answer =	c_morton256_z[(z >> 16) & 0xFF ] |
+                c_morton256_y[(y >> 16) & 0xFF ] |
+                c_morton256_x[(x >> 16) & 0xFF ];
+    answer = answer << 48 |
+                c_morton256_z[(z >> 8) & 0xFF ] |
+                c_morton256_y[(y >> 8) & 0xFF ] |
+                c_morton256_x[(x >> 8) & 0xFF ];
+    answer = answer << 24 |
+                c_morton256_z[(z) & 0xFF ] |
+                c_morton256_y[(y) & 0xFF ] |
+                c_morton256_x[(x) & 0xFF ];
+    return answer;
+}
 template <typename T>
 struct CAABox {
     T min;
@@ -200,8 +184,8 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
         const int y = t_bbox_grid.min.y + (rem / bbox_size.x);
         const int x = t_bbox_grid.min.x + (rem % bbox_size.x);
 
-        //const uint64 index = mortonEncode_magicbits(z, y, x);
-        const _uint64 index = get_key_morton(make_int4(z,y,x,0));//cuda_mortonEncode_for(x,y,z);
+        const u_int64_t index = cuda_mortonEncode_LUT(z, y, x);
+        //const u_int64_t index = cuda_mortonEncode_magicbits(z,y,x);//cuda_mortonEncode_for(x,y,z);
         // TRIANGLE PLANE THROUGH BOX TEST
         const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
         const float nDOTp = dot(n , p);
@@ -225,12 +209,12 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
                 || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
                 || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
                 )){
-            if (atomicCAS(&voxels[index.l - morton_start], EMPTY_VOXEL,FULL_VOXEL) == EMPTY_VOXEL){
+            if (atomicCAS(&voxels[index - morton_start], EMPTY_VOXEL,FULL_VOXEL) == EMPTY_VOXEL){
                 uint idx = atomicInc(&nfilled[0], 1e20);//nfilled++;
                 if (COUNT_ONLY == false){
 
                     //if (use_data){
-                         data[idx] = index.l;
+                         data[idx] = index;
                     //}
                 }
             }
