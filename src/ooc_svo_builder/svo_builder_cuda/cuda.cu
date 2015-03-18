@@ -225,14 +225,13 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
                 || ((dot(n_zx_e1 , p_zx) + d_xz_e1) < 0.0f)
                 || ((dot(n_zx_e2 , p_zx) + d_xz_e2) < 0.0f)
                 )){
-            if (COUNT_ONLY == false){
-                if (atomicCAS(&voxels[index.l - morton_start], EMPTY_VOXEL,FULL_VOXEL) == EMPTY_VOXEL){
+            if (atomicCAS(&voxels[index.l - morton_start], EMPTY_VOXEL,FULL_VOXEL) == EMPTY_VOXEL){
+                uint idx = atomicInc(&nfilled[0], 1e20);//nfilled++;
+                if (COUNT_ONLY == false){
 
                     //if (use_data){
-                        int idx = atomicInc(&nfilled[0], 1000000000);//nfilled++;
                          data[idx] = index.l;
                     //}
-
                 }
             }
         }
@@ -263,55 +262,57 @@ void voxelize(const float3 *v0, const float3 *v1, const float3 *v2,const uint64 
 #include <tbb/atomic.h>
 #include <tbb/tbb.h>
 extern "C"
-void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint64 morton_start, const uint64 morton_end, const float unitlength, tbb::atomic<voxel_t> *voxels, tbb::concurrent_vector<uint64> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
+void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t *voxels, std::vector<uint64> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
              const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items, size_t num_triangles)
 {
     ErrorCheck ec;
     ec.chk("cudaRun");
-    int *d_voxels, *h_voxels;
-    cudaMalloc( (void**) &d_voxels, sizeof(int)*(morton_end - morton_start));    ec.chk("voxel malloc");
-
-    h_voxels = new int[morton_end - morton_start];
-
-    uint64 *d_data;
-    cudaMalloc( (void**) &d_data, sizeof(uint64)*data.size());     ec.chk("data malloc");
-
-    uint64 *h_data = new uint64[data.size()];
-
+    int *d_voxels;
+    uint64 *d_data = 0;
     uint *d_nfilled;
+
+    cudaMalloc( (void**) &d_voxels, sizeof(int)*(morton_end - morton_start));    ec.chk("voxel malloc");
     cudaMalloc( (void**) &d_nfilled, sizeof(uint));     ec.chk("nfilled malloc");
+
 
     cudaMemset(d_nfilled,0, sizeof(uint));
     cudaMemset(d_voxels, EMPTY_VOXEL, sizeof(int)*(morton_end - morton_start));
-    cudaMemset(d_data, 0, sizeof(uint64)*data.size());
     ec.chk("memory finished");
+
     //get count
-    voxelize<false><<<10000,32>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
+    voxelize<true><<<10000,32>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
 
     cudaThreadSynchronize();
-    ec.chk("voxelize done" );
+    ec.chk("voxelize count" );
     uint h_nfilled = 0;
     cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
-    //nfilled = h_nfilled;
-//    cudaMemcpy(h_voxels, d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
-//    for (int i=0; i<(morton_end - morton_start); i++){
-//        voxels[i] = (char)h_voxels[i];
-//    }
+    if (h_nfilled > 0){
 
-    cudaMemcpy(h_data, d_data, data.size()*sizeof(uint64), cudaMemcpyDeviceToHost);
-    cudaThreadSynchronize();
-//    std::sort(data.begin(), data.end());
-//    std::sort(h_data, h_data + data.size());
-    for (int i=0; i<data.size(); i++){
-        data[i] = h_data[i];
+        cudaMalloc( (void**) &d_data, sizeof(uint64)*h_nfilled);     ec.chk("data malloc");
+        cudaMemset(d_data, 0, sizeof(uint64)*h_nfilled);
+        cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
+        cudaMemset(d_nfilled, 0, sizeof(uint));
+
+        //fill d_data
+        voxelize<false><<<10000,32>>>(d_v0, d_v1, d_v2, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
+                        p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
+
+
+        cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
+        nfilled += h_nfilled;
+        cudaMemcpy(&voxels[0], d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
+
+        data.resize(h_nfilled);
+        cudaMemcpy(&data[0], d_data, h_nfilled*sizeof(uint64), cudaMemcpyDeviceToHost);
+        cudaThreadSynchronize();
+        ec.chk("voxelize output data");
+
+        cudaFree(d_data);
     }
 
-
     cudaFree(d_voxels);
-    cudaFree(d_data);
     cudaFree(d_nfilled);
-    delete h_voxels;
-    delete h_data;
 
+    ec.chk("final cuda check");
 }

@@ -82,18 +82,26 @@ INCLUDE_DIRECTORIES (
   ./src/ooc_svo_builder/tri_tools/include
   )
 
+ADD_DEFINITIONS("-std=c++0x -march=native -msse2")
 
 SET(SVO_BUILDER_SRCS
   ./src/ooc_svo_builder/svo_builder/main.cpp
   ./src/ooc_svo_builder/svo_builder/OctreeBuilder.cpp
   ./src/ooc_svo_builder/svo_builder/partitioner.cpp
   ./src/ooc_svo_builder/svo_builder/voxelizer.cpp
-  ./src/ooc_svo_builder/svo_builder/cuda.cu
-  ./src/ooc_svo_builder/svo_builder/ErrorCheck.cpp
+
 )
-CUDA_ADD_EXECUTABLE (  svo_builder ${SVO_BUILDER_SRCS} )
+ADD_EXECUTABLE (  svo_builder ${SVO_BUILDER_SRCS} )
 
-
+SET(SVO_BUILDER_CUDA_SRCS
+  ./src/ooc_svo_builder/svo_builder_cuda/main.cpp
+  ./src/ooc_svo_builder/svo_builder_cuda/OctreeBuilder.cpp
+  ./src/ooc_svo_builder/svo_builder_cuda/partitioner.cpp
+  ./src/ooc_svo_builder/svo_builder_cuda/voxelizer.cpp
+  ./src/ooc_svo_builder/svo_builder_cuda/cuda.cu
+  ./src/ooc_svo_builder/svo_builder_cuda/ErrorCheck.cpp
+)
+CUDA_ADD_EXECUTABLE (  svo_builder_cuda ${SVO_BUILDER_CUDA_SRCS} )
 
 SET(TRI_CONVERT_SRCS
   ./src/ooc_svo_builder/tri_convert/tri_convert.cpp
@@ -105,7 +113,13 @@ TARGET_LINK_LIBRARIES ( svo_builder
 tbb
 	tbbmalloc_proxy
 )
+TARGET_LINK_LIBRARIES ( svo_builder_cuda
+  gomp
+tbb
+        tbbmalloc_proxy
+)
 TARGET_LINK_LIBRARIES ( tri_convert
   ${Trimesh2_LIBRARY}
   gomp
 )
+
