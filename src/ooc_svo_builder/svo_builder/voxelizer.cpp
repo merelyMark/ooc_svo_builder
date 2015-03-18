@@ -3,6 +3,9 @@
 #include <omp.h>
 #include <typeinfo>
 #include <nmmintrin.h>
+#include <TriReaderIter.h>
+#include "intersection.h"
+#include "partitioner.h"
 
 using namespace std;
 using namespace trimesh;
@@ -61,9 +64,13 @@ uint2 cpu_dilate3(int value) {
   return key;
 }
 
- template<char COUNT_ONLY, char CUDA_PARALLEL>
+bool compare_and_swap(tbb::atomic<voxel_t> *voxels, mort_t idx)
+{
+    return voxels[idx].compare_and_swap(FULL_VOXEL, EMPTY_VOXEL) == EMPTY_VOXEL;
+}
 
-void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items, int tid = 0)
+template<char COUNT_ONLY, char CUDA_PARALLEL>
+void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items, int tid = 0)
 
 {
     // read triangle
@@ -182,7 +189,7 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
                 || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
                 )){
             if (COUNT_ONLY == 0){
-                if (voxels[index.l - morton_start].compare_and_swap(FULL_VOXEL, EMPTY_VOXEL) == EMPTY_VOXEL){
+                if (compare_and_swap(voxels, index.l - morton_start)){
                     if (use_data){
                         nfilled++;
                         data.push_back(index.l);
@@ -197,12 +204,12 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
 #endif
 }
 
-void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+void runCPUCUDAStyle(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 {
     //this is
 #pragma omp parallel for
-    for (int i=0; i<reader.triangles.size(); i++){
-        Triangle t = reader.triangles[i];
+    for (int i=0; i<reader->triangles.size(); i++){
+        Triangle t = reader->triangles[i];
 
         voxelize_triangle<1,1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
     }
@@ -212,19 +219,19 @@ void runCPUCUDAStyle(TriReaderIter &reader, const mort_t morton_start, const mor
     memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
 
 #pragma omp parallel for
-    for (int i=0; i<reader.triangles.size(); i++){
-        Triangle t = reader.triangles[i];
+    for (int i=0; i<reader->triangles.size(); i++){
+        Triangle t = reader->triangles[i];
         voxelize_triangle<0,1>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     }
 
 }
 
-void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+void runCPUParallel(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 {
 //#pragma omp parallel for
-    for (int i=0; i<reader.triangles.size(); i++){
-        Triangle t = reader.triangles[i];
+    for (int i=0; i<reader->triangles.size(); i++){
+        Triangle t = reader->triangles[i];
         voxelize_triangle<0,0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 //        const int z = i / (128*128);
 //        const int rem = i % (128*128);
@@ -235,9 +242,9 @@ void runCPUParallel(TriReaderIter &reader, const mort_t morton_start, const mort
     }
 }
 
-void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+void runCUDA(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 {
-    vector<Triangle> tris = reader.triangles;
+    vector<Triangle> tris = reader->triangles;
     float3 *v0, *v1, *v2;
     v0 = new float3[tris.size()];
     v1 = new float3[tris.size()];
@@ -290,7 +297,7 @@ void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t mort
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
-void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<char>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
+void voxelize_schwarz_method(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
 
     vox_algo_timer.start();
 	memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
@@ -308,8 +315,7 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
         mort_t max_bytes_data = (mort_t) (((morton_end - morton_start)*sizeof(char)) * sparseness_limit);
 
         data_max_items = max_bytes_data / sizeof(mort_t);
-		data_max_items = max_bytes_data / sizeof(VoxelData);
-	}
+    }
 
 
     // COMMON PROPERTIES FOR ALL TRIANGLES

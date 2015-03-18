@@ -10,6 +10,8 @@
 #include "morton.h"
 #include "voxelizer.h"
 
+typedef Vec<3, unsigned int> uivec3;
+
 // Partitioning-related stuff
 size_t estimate_partitions(const size_t gridsize, const size_t memory_limit);
 void removeTripFiles(const TripInfo &trip_info);

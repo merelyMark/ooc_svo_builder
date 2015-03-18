@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
 	float unitlength = (trip_info.mesh_bbox.max[0] - trip_info.mesh_bbox.min[0]) / (float)trip_info.gridsize;
     mort_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
-    tbb::atomic<char>* voxels = new tbb::atomic<char>[(size_t)morton_part]; // Storage for voxel on/off
+    tbb::atomic<voxel_t>* voxels = new tbb::atomic<voxel_t>[(size_t)morton_part]; // Storage for voxel on/off
 
     tbb::concurrent_vector<mort_t> data; // Dynamic storage for morton codes
 
@@ -306,7 +306,7 @@ int main(int argc, char *argv[]) {
 		vox_io_in_timer.start(); // TIMING
 		std::string part_data_filename = trip_info.base_filename + string("_") + val_to_string(i) + string(".tripdata");
         vox_io_in_timer.start();
-        TriReaderIter reader = TriReaderIter(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
+        TriReaderIter *reader = new TriReaderIter(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
 
 
 		if (verbose) { cout << "  reading " << trip_info.part_tricounts[i] << " triangles from " << part_data_filename << endl; }
@@ -342,7 +342,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 		}
-
+        delete reader;
 		svo_algo_timer.stop(); svo_total_timer.stop();  // TIMING
 	}
 	svo_total_timer.start(); svo_algo_timer.start(); // TIMING
@@ -356,4 +356,5 @@ int main(int argc, char *argv[]) {
 
 	main_timer.stop();
 	printTimerInfo();
+
 }
