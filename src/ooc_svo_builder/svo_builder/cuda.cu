@@ -11,6 +11,8 @@ typedef union {
   long long unsigned int l;
 } _uint64;
 
+
+
 extern "C"
 void cudaConstants(const uint *x, const uint *y, const uint *z)
 {
@@ -199,7 +201,7 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
         const int x = t_bbox_grid.min.x + (rem % bbox_size.x);
 
         //const uint64 index = mortonEncode_magicbits(z, y, x);
-        const _uint64 index = get_key_morton(make_int4(x,y,z,0));//cuda_mortonEncode_for(x,y,z);
+        const _uint64 index = get_key_morton(make_int4(z,y,x,0));//cuda_mortonEncode_for(x,y,z);
         // TRIANGLE PLANE THROUGH BOX TEST
         const float3  p = make_float3(x*unitlength, y*unitlength, z*unitlength);
         const float nDOTp = dot(n , p);

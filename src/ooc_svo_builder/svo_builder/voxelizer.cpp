@@ -156,7 +156,7 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
         const int rem = i % (bbox_size[1] * bbox_size[0]);
         const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
         const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
-        const cpu_uint64 index = cpu_get_key_morton(make_int4(x,y,z,0));//mortonEncode_LUT(z, y, x);
+        const cpu_uint64 index = cpu_get_key_morton(make_int4(z,y,x,0));//mortonEncode_LUT(z, y, x);
         assert(index.l < morton_end);
         // TRIANGLE PLANE THROUGH BOX TEST
         const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
@@ -324,7 +324,7 @@ void voxelize_schwarz_method(TriReaderIter &reader, const mort_t morton_start, c
 
     //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
     runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    //runCUDA(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     vox_algo_timer.stop();
 }
