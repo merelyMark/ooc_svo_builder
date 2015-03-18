@@ -93,12 +93,12 @@ __device__ T d_clampval(const T& value, const T& low, const T& high) {
 __device__
 CAABox<float3> cudaComputeBoundingBox(const float3 &v0, const float3 &v1, const float3 &v2){
         CAABox<float3> answer;
-        answer.min.x = min(v0.x,min(v1.x,v2.x));
-        answer.min.y = min(v0.y,min(v1.y,v2.y));
-        answer.min.z = min(v0.z,min(v1.z,v2.z));
-        answer.max.x = max(v0.x,max(v1.x,v2.x));
-        answer.max.y = max(v0.y,max(v1.y,v2.y));
-        answer.max.z = max(v0.z,max(v1.z,v2.z));
+        answer.min.x = fminf(v0.x,fminf(v1.x,v2.x));
+        answer.min.y = fminf(v0.y,fminf(v1.y,v2.y));
+        answer.min.z = fminf(v0.z,fminf(v1.z,v2.z));
+        answer.max.x = fmaxf(v0.x,fmaxf(v1.x,v2.x));
+        answer.max.y = fmaxf(v0.y,fmaxf(v1.y,v2.y));
+        answer.max.z = fmaxf(v0.z,fmaxf(v1.z,v2.z));
         return answer;
 }
 
@@ -299,8 +299,8 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint
 
     cudaMemcpy(h_data, d_data, data.size()*sizeof(uint64), cudaMemcpyDeviceToHost);
     cudaThreadSynchronize();
-    std::sort(data.begin(), data.end());
-    std::sort(h_data, h_data + data.size());
+//    std::sort(data.begin(), data.end());
+//    std::sort(h_data, h_data + data.size());
     for (int i=0; i<data.size(); i++){
         data[i] = h_data[i];
     }

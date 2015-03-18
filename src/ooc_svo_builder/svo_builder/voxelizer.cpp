@@ -248,13 +248,13 @@ void runCUDA(TriReaderIter &reader, const mort_t morton_start, const mort_t mort
         v0[i].y = tris[i].v0[1];
         v0[i].z = tris[i].v0[2];
 
-        v1[i].x = tris[i].v0[0];
-        v1[i].y = tris[i].v0[1];
-        v1[i].z = tris[i].v0[2];
+        v1[i].x = tris[i].v1[0];
+        v1[i].y = tris[i].v1[1];
+        v1[i].z = tris[i].v1[2];
 
-        v2[i].x = tris[i].v0[0];
-        v2[i].y = tris[i].v0[1];
-        v2[i].z = tris[i].v0[2];
+        v2[i].x = tris[i].v2[0];
+        v2[i].y = tris[i].v2[1];
+        v2[i].z = tris[i].v2[2];
 
     }
 
