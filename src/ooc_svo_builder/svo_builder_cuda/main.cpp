@@ -266,11 +266,13 @@ int main(int argc, char *argv[]) {
 	// PARTITIONING
 	part_total_timer.start(); part_io_in_timer.start(); // TIMING
 	readTriHeader(filename, tri_info);
+    TriReaderIter *orig_reader = new TriReaderIter(tri_info.base_filename + string(".tridata"), tri_info.n_triangles, input_buffersize);
+
 	part_io_in_timer.stop();
 	size_t n_partitions = estimate_partitions(gridsize, voxel_memory_limit);
 	cout << "Partitioning data into " << n_partitions << " partitions ... "; cout.flush();
-	TripInfo trip_info = partition(tri_info, n_partitions, gridsize);
-	cout << "done." << endl;
+    TripInfo trip_info = partition(tri_info, n_partitions, gridsize, orig_reader);
+    cout << "done." << endl;
 	part_total_timer.stop(); // TIMING
 
 	vox_total_timer.start(); vox_io_in_timer.start(); // TIMING
@@ -297,9 +299,12 @@ int main(int argc, char *argv[]) {
 	svo_total_timer.stop();
 
     cudaConstants(morton256_x, morton256_y, morton256_z);
+    float3 *d_v0, *d_v1, *d_v2;
+    int *d_voxels;
+
 	// Start voxelisation and SVO building per partition
     for (size_t i = 0; i < trip_info.n_partitions; i++) {
-		if (trip_info.part_tricounts[i] == 0) { continue; } // skip partition if it contains no triangles
+        if (trip_info.part_tricounts[i] == 0) { continue; } // skip partition if it contains no triangles
 
 		// VOXELIZATION
 		vox_total_timer.start(); // TIMING
@@ -319,7 +324,7 @@ int main(int argc, char *argv[]) {
 		// voxelize partition
 		size_t nfilled_before = nfilled;
 		bool use_data = true;
-		voxelize_schwarz_method(reader, start, end, unitlength, voxels, data, sparseness_limit, use_data, nfilled);
+        voxelize_schwarz_method(reader, orig_reader, d_v0, d_v1, d_v2, d_voxels, start, end, morton_part, unitlength, voxels, data, sparseness_limit, use_data, nfilled);
 		if (verbose) { cout << "  found " << nfilled - nfilled_before << " new voxels." << endl; }
 		vox_total_timer.stop(); // TIMING
 

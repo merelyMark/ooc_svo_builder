@@ -97,52 +97,54 @@ TripInfo partition_one(const TriInfo& tri_info, const size_t gridsize){
 }
 
 // Partition the mesh referenced by tri_info into n partitions for gridsize, and store information about the partitioning in trip_info
-TripInfo partition(const TriInfo& tri_info, const size_t n_partitions, const size_t gridsize){
-	// Special case: just one partition
-	if (n_partitions == 1) {
-		return partition_one(tri_info, gridsize);
-	}
+TripInfo partition(const TriInfo& tri_info, const size_t n_partitions, const size_t gridsize, TriReaderIter *reader){
+    // Special case: just one partition
+    if (n_partitions == 1) {
+        return partition_one(tri_info, gridsize);
+    }
 
-	// Open tri_data stream
-	part_io_in_timer.start(); // TIMING
-	TriReader reader = TriReader(tri_info.base_filename + string(".tridata"), tri_info.n_triangles, input_buffersize);
-	part_io_in_timer.stop(); // TIMING
+    // Open tri_data stream
+    part_io_in_timer.start(); // TIMING
+    //TriReader reader = TriReader(tri_info.base_filename + string(".tridata"), tri_info.n_triangles, input_buffersize);
+    part_io_in_timer.stop(); // TIMING
 
-	part_algo_timer.start(); // TIMING
-	// Create Mortonbuffers
-	vector<Buffer*> buffers;
-	createBuffers(tri_info, n_partitions, gridsize, buffers);
+    part_algo_timer.start(); // TIMING
+    // Create Mortonbuffers
+    vector<Buffer*> buffers;
+    createBuffers(tri_info, n_partitions, gridsize, buffers);
+    int i=0;
+    while (reader->hasNext()) {
+        Triangle t;
+        part_algo_timer.stop(); part_io_in_timer.start(); // TIMING
+        reader->getTriangle(t);
+        t.idx = i;
+        part_io_in_timer.stop(); part_algo_timer.start(); // TIMING
+        AABox<vec3> bbox = computeBoundingBox(t.v0, t.v1, t.v2); // compute bounding box
+        for (int j = 0; j < n_partitions; j++){ // Test against all partitions
+            buffers[j]->processTriangle(t, bbox);
+        }
+        i++;
+    }
+    part_algo_timer.stop(); // TIMING
+    part_io_out_timer.start(); // TIMING
 
-	while (reader.hasNext()) {
-		Triangle t;
-		part_algo_timer.stop(); part_io_in_timer.start(); // TIMING
-		reader.getTriangle(t);
-		part_io_in_timer.stop(); part_algo_timer.start(); // TIMING
-		AABox<vec3> bbox = computeBoundingBox(t.v0, t.v1, t.v2); // compute bounding box
-		for (int j = 0; j < n_partitions; j++){ // Test against all partitions
-			buffers[j]->processTriangle(t, bbox);
-		}
-	}
-	part_algo_timer.stop(); // TIMING
-	part_io_out_timer.start(); // TIMING
+    // create TripInfo object to hold header info
+    TripInfo trip_info = TripInfo(tri_info);
 
-	// create TripInfo object to hold header info
-	TripInfo trip_info = TripInfo(tri_info);
+    // Collect ntriangles and close buffers
+    trip_info.part_tricounts.resize(n_partitions);
+    for (size_t j = 0; j < n_partitions; j++){
+        trip_info.part_tricounts[j] = buffers[j]->n_triangles;
+        delete buffers[j];
+    }
 
-	// Collect ntriangles and close buffers
-	trip_info.part_tricounts.resize(n_partitions);
-	for (size_t j = 0; j < n_partitions; j++){
-		trip_info.part_tricounts[j] = buffers[j]->n_triangles;
-		delete buffers[j];
-	}
+    // Write trip header
+    trip_info.base_filename = tri_info.base_filename + val_to_string(gridsize) + string("_") + val_to_string(n_partitions);
+    std::string header = trip_info.base_filename + string(".trip");
+    trip_info.gridsize = gridsize;
+    trip_info.n_partitions = n_partitions;
+    writeTripHeader(header, trip_info);
 
-	// Write trip header
-	trip_info.base_filename = tri_info.base_filename + val_to_string(gridsize) + string("_") + val_to_string(n_partitions);
-	std::string header = trip_info.base_filename + string(".trip");
-	trip_info.gridsize = gridsize;
-	trip_info.n_partitions = n_partitions;
-	writeTripHeader(header, trip_info);
-
-	part_io_out_timer.stop(); // TIMING
-	return trip_info;
+    part_io_out_timer.stop(); // TIMING
+    return trip_info;
 }
