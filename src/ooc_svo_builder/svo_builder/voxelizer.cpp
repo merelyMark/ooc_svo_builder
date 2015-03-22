@@ -169,7 +169,6 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
         const int y = t_bbox_grid.min[1] + (rem / bbox_size[0]);
         const int x = t_bbox_grid.min[0] + (rem % bbox_size[0]);
         const uint64 index = mortonEncode_LUT(z, y, x);
-        assert(index.l < morton_end);
         // TRIANGLE PLANE THROUGH BOX TEST
         const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
         const float nDOTp = n DOT p;
@@ -232,11 +231,12 @@ void runCPUCUDAStyle(TriReaderIter *reader, const mort_t morton_start, const mor
 
 }
 
-void runCPUParallel(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
+void runCPUParallel(TriReaderIter *reader, TriReaderIter *orig_reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, const AABox<uivec3> &p_bbox_grid, const float unit_div, const vec3 &delta_p,	size_t data_max_items)
 {
-//#pragma omp parallel for
+#pragma omp parallel for
     for (int i=0; i<reader->triangles.size(); i++){
-        Triangle t = reader->triangles[i];
+        int idx = reader->triangles[i].idx;
+        Triangle t = orig_reader->triangles[idx];
         voxelize_triangle<0,0>(t, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 //        const int z = i / (128*128);
 //        const int rem = i % (128*128);
@@ -250,11 +250,17 @@ void runCPUParallel(TriReaderIter *reader, const mort_t morton_start, const mort
 
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
-
-void voxelize_schwarz_method(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
+bool first_time = false;
+void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled) {
 
     vox_algo_timer.start();
+    orig_reader->resetCount();
+
 	memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
+
+    if (first_time){
+        first_time = true;
+    }
 	data.clear();
 
 	// compute partition min and max in grid coords
@@ -283,7 +289,7 @@ void voxelize_schwarz_method(TriReaderIter *reader, const mort_t morton_start, c
 //         iter != reader.triangles.end(); ++iter){
 
     //runCPUCUDAStyle(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
-    runCPUParallel(reader,morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
+    runCPUParallel(reader, orig_reader, morton_start, morton_end, unitlength, voxels, data, sparseness_limit, use_data, nfilled, p_bbox_grid, unit_div, delta_p, data_max_items);
 
     vox_algo_timer.stop();
 }

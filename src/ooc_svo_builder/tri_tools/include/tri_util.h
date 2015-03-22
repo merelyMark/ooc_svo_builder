@@ -6,11 +6,8 @@
 using namespace std;
 using namespace trimesh;
 
-#ifdef BINARY_VOXELIZATION
-#define TRIANGLE_SIZE 9 // just the vertices
-#else
-#define TRIANGLE_SIZE 21 // vertices + normal + vertex colors
-#endif
+#define TRIANGLE_SIZE 10 // just the vertices
+
 
 // Various helper methods / structs
 
@@ -34,32 +31,12 @@ struct AABox {
     }
 };
 
-#ifdef BINARY_VOXELIZATION
 struct Triangle {
 	vec3 v0;
 	vec3 v1;
-	vec3 v2;
-
-	Triangle(): v0(vec3()), v1(vec3()), v2(vec3()) {}
+        vec3 v2;
+        int idx;
+        Triangle(): v0(vec3()), v1(vec3()), v2(vec3()) {}
 	Triangle(vec3 v0, vec3 v1, vec3 v2): v0(v0), v1(v1), v2(v2) {}
 };
-#else
-struct Triangle {
-	vec3 v0;
-	vec3 v1;
-	vec3 v2;
-	vec3 normal;
-	Color v0_color;
-	Color v1_color;
-	Color v2_color;
-
-	// Default constructor
-	Triangle(): v0(vec3()), v1(vec3()), v2(vec3()), normal(vec3()), v0_color(Color()),v1_color(Color()),v2_color(Color()){}
-
-	// Constructor with all fields
-	Triangle(vec3 v0, vec3 v1, vec3 v2, vec3 normal, Color v0_color, Color v1_color, Color v2_color): v0(v0), v1(v1), v2(v2), normal(normal),
-		v0_color(v0_color), v1_color(v1_color),v2_color(v2_color){}
-};
-#endif
-
 #endif

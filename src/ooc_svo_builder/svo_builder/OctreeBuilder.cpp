@@ -22,11 +22,11 @@ gridlength(gridlength), b_node_pos(0), b_data_pos(0), b_current_morton(0), gener
 	b_max_morton = mortonEncode_LUT((unsigned int)gridlength - 1, (unsigned int)gridlength - 1, (unsigned int)gridlength - 1);
 	svo_algo_timer.stop(); svo_io_out_timer.start(); // TIMING
 	writeVoxelData(data_out, VoxelData(), b_data_pos); // first data point is NULL
-#ifdef BINARY_VOXELIZATION
-	VoxelData v = VoxelData(0, vec3(), vec3(1.0, 1.0, 1.0)); // We store a simple white voxel in case of Binary voxelization
+
+    VoxelData v = VoxelData(0, vec3(), vec3(1.0, 1.0, 1.0)); // We store a simple white voxel in case of Binary voxelization
 	writeVoxelData(data_out, v, b_data_pos); // all leafs will refer to this
-#endif
-	svo_io_out_timer.stop(); svo_algo_timer.stop();
+
+    svo_io_out_timer.stop(); svo_algo_timer.stop();
 }
 
 // Finalize the tree: add rest of empty nodes, make sure root node is on top

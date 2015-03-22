@@ -12,7 +12,9 @@ public:
     TriReaderIter() : TriReader(){}
     TriReaderIter(const TriReader&tr) : TriReader(tr){}
     TriReaderIter(const std::string &filename, size_t n_triangles, size_t buffersize);
-
+    Triangle getTriangle();
+    void getTriangle(Triangle& t);
+    void resetCount(){ n_served = 0;current_tri = 0;}
 
     virtual bool hasNext();
     ~TriReaderIter();
@@ -27,6 +29,8 @@ inline TriReaderIter::TriReaderIter(const std::string &filename, size_t n_triang
 
     triangles.reserve(n_triangles);
     fillBuffer();
+    n_served = 0;
+    current_tri = 0;
 }
 
 
@@ -45,4 +49,16 @@ inline void TriReaderIter::fillBuffer(){
 
 inline TriReaderIter::~TriReaderIter(){
 }
+
+inline Triangle TriReaderIter::getTriangle(){
+    Triangle t = triangles[current_tri]; // assign triangle from buffer
+    current_tri++; // set index for next triangle
+    n_served++;
+    return t;
+}
+inline void TriReaderIter::getTriangle(Triangle& t){
+
+    t = getTriangle();
+}
+
 #endif // TRIREADERITER_H

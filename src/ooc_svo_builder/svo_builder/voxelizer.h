@@ -21,7 +21,7 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2,const uint
              const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items, size_t num_triangles);
 
 
-void voxelize_schwarz_method(TriReaderIter *reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
+void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader, const mort_t morton_start, const mort_t morton_end, const float unitlength, tbb::atomic<voxel_t>* voxels, tbb::concurrent_vector<mort_t> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
 
 
 #endif // VOXELIZER_H_
