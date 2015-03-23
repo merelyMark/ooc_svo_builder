@@ -7,6 +7,7 @@
 #include <TriReaderIter.h>
 #include <algorithm>
 #include <tbb/parallel_sort.h>
+#include <thrust/host_vector.h>
 
 #include "voxelizer.h"
 #include "OctreeBuilder.h"
@@ -285,9 +286,10 @@ int main(int argc, char *argv[]) {
 	float unitlength = (trip_info.mesh_bbox.max[0] - trip_info.mesh_bbox.min[0]) / (float)trip_info.gridsize;
     mort_t morton_part = (trip_info.gridsize * trip_info.gridsize * trip_info.gridsize) / trip_info.n_partitions;
 
-    voxel_t* voxels = new voxel_t[(size_t)morton_part]; // Storage for voxel on/off
+    voxel_t* voxels = 0;//new voxel_t[(size_t)morton_part]; // Storage for voxel on/off
 
-    std::vector<mort_t> data; // Dynamic storage for morton codes
+    mort_t *data; // Dynamic storage for morton codes
+    uint data_size = 0;
 
     tbb::atomic<size_t> nfilled;
     nfilled = 0;
@@ -308,7 +310,7 @@ int main(int argc, char *argv[]) {
 
 		// VOXELIZATION
 		vox_total_timer.start(); // TIMING
-		cout << "Voxelizing partition " << i << " ..." << endl;
+        cout << "Voxelizing partition " << i << " ..." << endl;
 		// morton codes for this partition
         mort_t start = i * morton_part;
         mort_t end = (i + 1) * morton_part;
@@ -324,8 +326,8 @@ int main(int argc, char *argv[]) {
 		// voxelize partition
 		size_t nfilled_before = nfilled;
 		bool use_data = true;
-        voxelize_schwarz_method(reader, orig_reader, d_v0, d_v1, d_v2, d_voxels, start, end, morton_part, unitlength, voxels, data, sparseness_limit, use_data, nfilled);
-		if (verbose) { cout << "  found " << nfilled - nfilled_before << " new voxels." << endl; }
+        voxelize_schwarz_method(reader, orig_reader, d_v0, d_v1, d_v2, d_voxels, start, end, morton_part, unitlength, voxels, data, data_size, sparseness_limit, use_data, nfilled);
+        cout << "  found " << nfilled - nfilled_before << " new voxels." << endl;
 		vox_total_timer.stop(); // TIMING
 
 		// build SVO
@@ -333,24 +335,26 @@ int main(int argc, char *argv[]) {
 		svo_total_timer.start(); svo_algo_timer.start(); // TIMING
 
         if (use_data){ // use array of morton codes to build the SVO
-            tbb::parallel_sort(data.begin(), data.end()); // sort morton codes
+            tbb::parallel_sort(data, data + data_size); // sort morton codes
             //sort(data.begin(), data.end());
 //            for (tbb::concurrent_vector<mort_t>::iterator it = data.begin(); it != data.end(); ++it){
 //				builder.addVoxel(*it);
 //			}
-            for (int i=0; i<data.size(); i++){
+            for (int i=0; i<data_size; i++){
                 builder.addVoxel(data[i]);
             }
 
 		}
 		else { // morton array overflowed : using slower way to build SVO
-            mort_t morton_number;
-			for (size_t j = 0; j < morton_part; j++) {
-				if (!voxels[j] == EMPTY_VOXEL) {
-					morton_number = start + j;
-					builder.addVoxel(morton_number);
-				}
-			}
+            cout << "This shouldn't happen, exiting..." << endl;
+            exit(-1);
+//            mort_t morton_number;
+//			for (size_t j = 0; j < morton_part; j++) {
+//				if (!voxels[j] == EMPTY_VOXEL) {
+//					morton_number = start + j;
+//					builder.addVoxel(morton_number);
+//				}
+//			}
 		}
         delete reader;
 		svo_algo_timer.stop(); svo_total_timer.stop();  // TIMING

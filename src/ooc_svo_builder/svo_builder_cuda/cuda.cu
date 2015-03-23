@@ -248,7 +248,7 @@ void voxelize(const float3 *v0, const float3 *v1, const float3 *v2, const uint *
 #include <tbb/tbb.h>
 extern "C"
 void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_tri_idx, uint *d_nfilled, int *d_voxels, uint64 *d_data,
-             const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t *voxels, std::vector<uint64> &data, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
+             const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t *voxels, uint64 *data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
              const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items, uint num_triangles)
 {
     ErrorCheck ec;
@@ -281,9 +281,9 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
 
         cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
         nfilled += h_nfilled;
-        cudaMemcpy(&voxels[0], d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
+        //cudaMemcpy(&voxels[0], d_voxels, sizeof(int) * (morton_end - morton_start), cudaMemcpyDeviceToHost);
 
-        data.resize(h_nfilled);
+        data_size = h_nfilled;
         cudaMemcpy(&data[0], d_data, h_nfilled*sizeof(uint64), cudaMemcpyDeviceToHost);
         cudaThreadSynchronize();
         ec.chk("voxelize output data");
