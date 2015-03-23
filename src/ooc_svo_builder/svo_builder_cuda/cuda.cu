@@ -263,7 +263,6 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
     voxelize<true><<<5000,64>>>(d_v0, d_v1, d_v2, d_tri_idx, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
 
-    cudaThreadSynchronize();
 
     ec.chk("voxelize count" );
     uint h_nfilled = 0;
@@ -285,7 +284,6 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
 
         data_size = h_nfilled;
         cudaMemcpy(&data[0], d_data, h_nfilled*sizeof(uint64), cudaMemcpyDeviceToHost);
-        cudaThreadSynchronize();
         ec.chk("voxelize output data");
     }
 

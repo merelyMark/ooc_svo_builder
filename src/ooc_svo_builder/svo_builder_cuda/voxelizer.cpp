@@ -48,8 +48,8 @@ void cudaLoadMem(TriReaderIter *reader, const AABox<uivec3> &p_bbox_grid, const 
 }
 
 void cudaLoadFullTri(TriReaderIter *orig_reader,
-                 float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, voxel_t *&h_voxels, int *&d_voxels, mort_t *&h_data,
-                     mort_t morton_length, int data_max_items)
+                 float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, voxel_t *&h_voxels, int *&d_voxels,
+                     mort_t morton_length)
 {
     vector<Triangle> tris = orig_reader->triangles;
 
@@ -85,7 +85,6 @@ void cudaLoadFullTri(TriReaderIter *orig_reader,
     delete []v2;
 
     cudaHostAlloc((void**)&h_voxels, sizeof(voxel_t)*morton_length, cudaHostAllocDefault);
-    cudaHostAlloc((void**)&h_data, sizeof(uint64)*data_max_items, cudaHostAllocDefault);
 
     cudaMalloc( (void**) &d_nfilled, sizeof(uint));
     cudaMalloc( (void**) &d_voxels, sizeof(int)*morton_length);
@@ -111,7 +110,7 @@ void runCUDA(float3 *d_v0, float3 *d_v1, float3 *d_v2, int *d_voxels, uint64 *d_
 bool first_time = true;
 void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader,
                              float3 *&d_v0, float3 *&d_v1, float3 *&d_v2,
-                             int *&d_voxels,
+                             int *&d_voxels, size_t data_max_items,
                              const mort_t morton_start, const mort_t morton_end, const mort_t morton_length, const float unitlength, voxel_t*&voxels, mort_t *&data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled)
 {
 
@@ -122,14 +121,6 @@ void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader,
 	mortonDecode(morton_start, p_bbox_grid.min[2], p_bbox_grid.min[1], p_bbox_grid.min[0]);
 	mortonDecode(morton_end - 1, p_bbox_grid.max[2], p_bbox_grid.max[1], p_bbox_grid.max[0]);
 
-	// compute maximum grow size for data array
-    size_t data_max_items;
-	if (use_data){
-        mort_t max_bytes_data = (mort_t) (((morton_end - morton_start)*sizeof(char)) * sparseness_limit);
-
-        data_max_items = max_bytes_data / sizeof(mort_t);
-        cout << "\t  Data Max Item: " << data_max_items << endl;
-    }
 
 
     // COMMON PROPERTIES FOR ALL TRIANGLES
@@ -138,7 +129,7 @@ void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader,
 
     if (first_time){
         first_time = false;
-        cudaLoadFullTri(orig_reader, d_v0, d_v1, d_v2, voxels, d_voxels, data, morton_length, data_max_items);
+        cudaLoadFullTri(orig_reader, d_v0, d_v1, d_v2, voxels, d_voxels, morton_length);
     }
 
     float3 cuda_delta_p;
