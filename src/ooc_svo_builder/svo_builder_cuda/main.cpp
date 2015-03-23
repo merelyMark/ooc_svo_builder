@@ -398,6 +398,7 @@ int main(int argc, char *argv[]) {
 
 	}
 
+    t.join();
 	svo_total_timer.start(); svo_algo_timer.start(); // TIMING
 	builder.finalizeTree(); // finalize SVO so it gets written to disk
 	cout << "done" << endl;

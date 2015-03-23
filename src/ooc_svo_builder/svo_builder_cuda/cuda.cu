@@ -243,6 +243,14 @@ void voxelize(const float3 *v0, const float3 *v1, const float3 *v2, const uint *
 //    data[idx] = cuda_mortonEncode_for(x,y,z);
 }
 
+template<typename T>
+__global__
+void cudaReset(T *vals, int num_vals)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    if (idx < num_vals)
+        vals[idx] = 0;
+}
 
 #include <tbb/atomic.h>
 #include <tbb/tbb.h>
@@ -257,8 +265,11 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
 
 
     cudaMemset(d_nfilled,0, sizeof(uint));  ec.chk("memory nfilled");
-    cudaMemset(d_voxels, EMPTY_VOXEL, sizeof(int)*(morton_end - morton_start)); ec.chk("memory voxels");
+    //cudaMemset(d_voxels, EMPTY_VOXEL, sizeof(int)*(morton_end - morton_start)); ec.chk("memory voxels");
 
+    int blockcnt = (morton_end - morton_start) / 1024 + 1;
+    int threadcnt = 1024;
+    cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start)); ec.chk("memory voxels");
     //get count
     voxelize<true><<<5000,64>>>(d_v0, d_v1, d_v2, d_tri_idx, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
@@ -269,10 +280,12 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
     cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
     if (h_nfilled > 0){
 
-        cudaMemset(d_data, 0, sizeof(uint64)*(morton_end - morton_start));
-        cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
-        cudaMemset(d_nfilled, 0, sizeof(uint));
+        //cudaMemset(d_data, 0, sizeof(uint64)*h_nfilled);
+        //cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
+        cudaReset<<<blockcnt, threadcnt>>>(d_data, h_nfilled);
+        cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start));
 
+        cudaMemset(d_nfilled, 0, sizeof(uint));
         //fill d_data
         voxelize<false><<<5000,64>>>(d_v0, d_v1, d_v2, d_tri_idx, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                         p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
