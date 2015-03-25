@@ -312,6 +312,12 @@ int main(int argc, char *argv[]) {
         TriReaderIter *reader = new TriReaderIter(part_data_filename, trip_info.part_tricounts[i], min(trip_info.part_tricounts[i], input_buffersize));
 
 
+
+        mort_t max_bytes_data = (mort_t) (((morton_part)*sizeof(char)) * sparseness_limit);
+
+        size_t data_max_items = max_bytes_data / sizeof(mort_t);
+        data.reserve(data_max_items);
+
 		if (verbose) { cout << "  reading " << trip_info.part_tricounts[i] << " triangles from " << part_data_filename << endl; }
 		vox_io_in_timer.stop(); // TIMING
 		// voxelize partition
