@@ -48,7 +48,7 @@ void cudaLoadMem(TriReaderIter *reader, const AABox<uivec3> &p_bbox_grid, const 
 }
 
 void cudaLoadFullTri(TriReaderIter *orig_reader,
-                 float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, voxel_t *&h_voxels, int *&d_voxels,
+                 float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, voxel_t *&h_voxels, voxel_t *&d_voxels,
                      mort_t morton_length)
 {
     vector<Triangle> tris = orig_reader->triangles;
@@ -87,7 +87,7 @@ void cudaLoadFullTri(TriReaderIter *orig_reader,
     cudaHostAlloc((void**)&h_voxels, sizeof(voxel_t)*morton_length, cudaHostAllocDefault);
 
     cudaMalloc( (void**) &d_nfilled, sizeof(uint));
-    cudaMalloc( (void**) &d_voxels, sizeof(int)*morton_length);
+    cudaMalloc( (void**) &d_voxels, sizeof(voxel_t)*morton_length);
     cudaMalloc( (void**) &d_data, sizeof(uint64)*morton_length);
 
     cudaMalloc((void**)&d_tri_idx, tris.size() * sizeof(uint));
@@ -95,7 +95,7 @@ void cudaLoadFullTri(TriReaderIter *orig_reader,
 }
 
 
-void runCUDA(float3 *d_v0, float3 *d_v1, float3 *d_v2, int *d_voxels, uint64 *d_data,
+void runCUDA(float3 *d_v0, float3 *d_v1, float3 *d_v2, voxel_t *d_voxels, uint64 *d_data,
              uint num_tris, const mort_t morton_start, const mort_t morton_end, const float unitlength, voxel_t * voxels, mort_t *data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled, uint3 &p_bbox_grid_min, uint3 &p_bbox_grid_max, const float unit_div, float3 &cuda_delta_p,	size_t data_max_items)
 {
 
@@ -110,7 +110,7 @@ void runCUDA(float3 *d_v0, float3 *d_v1, float3 *d_v2, int *d_voxels, uint64 *d_
 bool first_time = true;
 void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader,
                              float3 *&d_v0, float3 *&d_v1, float3 *&d_v2,
-                             int *&d_voxels, size_t data_max_items,
+                             voxel_t *&d_voxels, size_t data_max_items,
                              const mort_t morton_start, const mort_t morton_end, const mort_t morton_length, const float unitlength, voxel_t*&voxels, mort_t *&data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled)
 {
 

@@ -339,7 +339,7 @@ int main(int argc, char *argv[]) {
 
     cudaConstants(morton256_x, morton256_y, morton256_z);
     float3 *d_v0, *d_v1, *d_v2;
-    int *d_voxels;
+    voxel_t *d_voxels;
 
     bool first_time = true;
     bool use_data = true;
@@ -388,12 +388,11 @@ int main(int argc, char *argv[]) {
 
         delete reader;
 
-        if (!first_time){
-            t.join();
-            t.start(boost::bind(runSVO, builder, i, use_data, data[current_data_idx], data_size[current_data_idx]));
-            //runSVO(builder, i, use_data, data[current_data_idx], data_size[current_data_idx]);
-            current_data_idx = (current_data_idx + 1 ) % 2;
-        }
+        //t.join();
+        //t.start(boost::bind(runSVO, builder, i, use_data, data[current_data_idx], data_size[current_data_idx]));
+        runSVO(builder, i, use_data, data[current_data_idx], data_size[current_data_idx]);
+        current_data_idx = (current_data_idx + 1 ) % 2;
+
         first_time = false;
 
 	}

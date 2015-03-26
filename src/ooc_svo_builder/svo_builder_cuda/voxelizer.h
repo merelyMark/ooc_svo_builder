@@ -10,7 +10,7 @@
 
 // Voxelization-related stuff
 typedef unsigned long long int uint64;
-typedef int voxel_t;
+typedef char voxel_t;
 using namespace std;
 
 #define EMPTY_VOXEL 0
@@ -19,13 +19,13 @@ using namespace std;
 class TriReaderIter;
 
 extern "C"
-void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, unsigned int *d_tri_idx, unsigned int *d_nfilled, int *d_voxels, uint64 *d_data,
+void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, unsigned int *d_tri_idx, unsigned int *d_nfilled, voxel_t *d_voxels, uint64 *d_data,
              const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t *voxels, uint64 *data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
              const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items, unsigned int num_triangles);
 
 
 void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader,
-                             float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, int *&d_voxels, size_t data_max_items,
+                             float3 *&d_v0, float3 *&d_v1, float3 *&d_v2, voxel_t *&d_voxels, size_t data_max_items,
                              const mort_t morton_start, const mort_t morton_end, const mort_t morton_length, const float unitlength, voxel_t* &voxels, mort_t *&data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled);
 
 

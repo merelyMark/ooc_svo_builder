@@ -89,9 +89,30 @@ CAABox<float3> cudaComputeBoundingBox(const float3 &v0, const float3 &v1, const 
 }
 
 
+__device__
+char atomicCAS(char *address, char compare, char val)
+{
+    unsigned int *base_address = (unsigned int *)((size_t)address & ~3);
+    unsigned int selectors[] = {0x3214, 0x3240, 0x3410, 0x4210};
+    unsigned int sel = selectors[(size_t)address & 3];
+    unsigned int old, assumed, new_;
+    unsigned int ret;
+
+
+    old = *base_address;
+    do{
+        assumed = __byte_perm(old, compare, sel);
+        new_ = __byte_perm(old, val, sel);
+
+        old = atomicCAS(base_address, assumed, new_);
+    }while(old != assumed && old != new_);
+
+    return (char)__byte_perm(old, 0, ((size_t)address & 3) | 0x4440);
+}
+
 template<bool COUNT_ONLY>
 __device__
-void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start, const uint64 morton_end, const float unitlength, int* voxels, uint64 *data, float sparseness_limit, uint *nfilled,
+void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t* voxels, uint64 *data, float sparseness_limit, uint *nfilled,
                        const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items)
 
 {
@@ -227,7 +248,7 @@ void voxelize_triangle(float3 v0, float3 v1, float3 v2,const uint64 morton_start
 
 template<bool COUNT_ONLY>
 __global__
-void voxelize(const float3 *v0, const float3 *v1, const float3 *v2, const uint *tri_idx, const uint64 morton_start, const uint64 morton_end, const float unitlength, int* voxels, uint64 *data, float sparseness_limit, uint *nfilled,
+void voxelize(const float3 *v0, const float3 *v1, const float3 *v2, const uint *tri_idx, const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t* voxels, uint64 *data, float sparseness_limit, uint *nfilled,
                const uint3 p_bbox_grid_min, const uint3 p_bbox_grid_max, const float unit_div, const float3 delta_p,	size_t data_max_items, size_t num_triangles)
 {
     int tid = threadIdx.x + blockDim.x * blockIdx.x;
@@ -255,7 +276,7 @@ void cudaReset(T *vals, int num_vals)
 #include <tbb/atomic.h>
 #include <tbb/tbb.h>
 extern "C"
-void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_tri_idx, uint *d_nfilled, int *d_voxels, uint64 *d_data,
+void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_tri_idx, uint *d_nfilled, voxel_t *d_voxels, uint64 *d_data,
              const uint64 morton_start, const uint64 morton_end, const float unitlength, voxel_t *voxels, uint64 *data, uint &data_size, float sparseness_limit, bool &use_data, tbb::atomic<size_t> &nfilled,
              const uint3 &p_bbox_grid_min, const uint3 &p_bbox_grid_max, const float unit_div, const float3 &delta_p,	size_t data_max_items, uint num_triangles)
 {
@@ -269,7 +290,8 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
 
     int blockcnt = (morton_end - morton_start) / 1024 + 1;
     int threadcnt = 1024;
-    cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start)); ec.chk("memory voxels");
+    //cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start)); ec.chk("memory voxels");
+    cudaMemset(d_voxels, 0, sizeof(voxel_t)*(morton_end - morton_start));
     //get count
     voxelize<true><<<5000,64>>>(d_v0, d_v1, d_v2, d_tri_idx, morton_start, morton_end, unitlength, d_voxels, d_data, use_data, d_nfilled,
                     p_bbox_grid_min, p_bbox_grid_max, unit_div, delta_p, data_max_items, num_triangles);
@@ -280,10 +302,10 @@ void cudaRun(const float3* d_v0, const float3*d_v1, const float3*d_v2, uint *d_t
     cudaMemcpy(&h_nfilled, d_nfilled, sizeof(uint), cudaMemcpyDeviceToHost);
     if (h_nfilled > 0){
 
-        //cudaMemset(d_data, 0, sizeof(uint64)*h_nfilled);
-        //cudaMemset(d_voxels, 0, sizeof(int)*(morton_end - morton_start));
-        cudaReset<<<blockcnt, threadcnt>>>(d_data, h_nfilled);
-        cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start));
+        cudaMemset(d_data, 0, sizeof(uint64)*h_nfilled);
+        cudaMemset(d_voxels, 0, sizeof(voxel_t)*(morton_end - morton_start));
+//        cudaReset<<<blockcnt, threadcnt>>>(d_data, h_nfilled);
+//        cudaReset<<<blockcnt, threadcnt>>>(d_voxels, (morton_end - morton_start));
 
         cudaMemset(d_nfilled, 0, sizeof(uint));
         //fill d_data
