@@ -102,36 +102,37 @@ void voxelize_triangle(const Triangle &t,const mort_t morton_start, const mort_t
     for (int z=t_bbox_grid.min[2]; z<t_bbox_grid.max[2]+1; z++){
 
         const uint64 index = mortonEncode_LUT(z, y, x);
-        if (voxels[ index - morton_start ] == FULL_VOXEL){continue;}
-        // TRIANGLE PLANE THROUGH BOX TEST
-        const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
-        const float nDOTp = n DOT p;
+        if (voxels[ index - morton_start ] != FULL_VOXEL){
+            // TRIANGLE PLANE THROUGH BOX TEST
+            const vec3 p = vec3(x*unitlength, y*unitlength, z*unitlength);
+            const float nDOTp = n DOT p;
 
-        // PROJECTION TESTS
-        // XY
-        const vec2 p_xy = vec2(p[X], p[Y]);
-        // YZ
-        const vec2 p_yz = vec2(p[Y], p[Z]);
-        // XZ
-        const vec2 p_zx = vec2(p[Z], p[X]);
+            // PROJECTION TESTS
+            // XY
+            const vec2 p_xy = vec2(p[X], p[Y]);
+            // YZ
+            const vec2 p_yz = vec2(p[Y], p[Z]);
+            // XZ
+            const vec2 p_zx = vec2(p[Z], p[X]);
 
-        if (!(((nDOTp + d1) * (nDOTp + d2) > 0.0f)
-        || (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f)
-        || (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f)
-        || (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f)
-        || (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f)
-        || (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f)
-        || (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f)
-        || (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f)
-        || (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f)
-        || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
-        )){
-            if (COUNT_ONLY == 0){
-                if (compare_and_swap(voxels, index - morton_start)){
-                //voxels[ index - morton_start ] = FULL_VOXEL;
-                    if (use_data){
-                        nfilled++;
-                        data.push_back(index);
+            if (!(((nDOTp + d1) * (nDOTp + d2) > 0.0f)
+            || (((n_xy_e0 DOT p_xy) + d_xy_e0) < 0.0f)
+            || (((n_xy_e1 DOT p_xy) + d_xy_e1) < 0.0f)
+            || (((n_xy_e2 DOT p_xy) + d_xy_e2) < 0.0f)
+            || (((n_yz_e0 DOT p_yz) + d_yz_e0) < 0.0f)
+            || (((n_yz_e1 DOT p_yz) + d_yz_e1) < 0.0f)
+            || (((n_yz_e2 DOT p_yz) + d_yz_e2) < 0.0f)
+            || (((n_zx_e0 DOT p_zx) + d_xz_e0) < 0.0f)
+            || (((n_zx_e1 DOT p_zx) + d_xz_e1) < 0.0f)
+            || (((n_zx_e2 DOT p_zx) + d_xz_e2) < 0.0f)
+            )){
+                if (COUNT_ONLY == 0){
+                    if (compare_and_swap(voxels, index - morton_start)){
+                    //voxels[ index - morton_start ] = FULL_VOXEL;
+                        if (use_data){
+                            nfilled++;
+                            data.push_back(index);
+                        }
                     }
                 }
             }
@@ -197,7 +198,7 @@ void voxelize_schwarz_method(TriReaderIter *reader, TriReaderIter *orig_reader, 
     vox_algo_timer.start();
     orig_reader->resetCount();
 
-	memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(char));
+    memset(voxels, EMPTY_VOXEL, (morton_end - morton_start)*sizeof(voxel_t));
 
     if (first_time){
         first_time = true;

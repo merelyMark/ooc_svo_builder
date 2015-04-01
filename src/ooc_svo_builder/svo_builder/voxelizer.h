@@ -8,7 +8,7 @@
 
 // Voxelization-related stuff
 typedef unsigned long long int uint64;
-typedef int voxel_t;
+typedef char voxel_t;
 using namespace std;
 
 #define EMPTY_VOXEL 0

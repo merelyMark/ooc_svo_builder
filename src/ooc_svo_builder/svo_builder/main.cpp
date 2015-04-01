@@ -325,6 +325,8 @@ int main(int argc, char *argv[]) {
 		bool use_data = true;
         voxelize_schwarz_method(reader, orig_reader, start, end, unitlength, voxels, data, sparseness_limit, use_data, nfilled);
 		if (verbose) { cout << "  found " << nfilled - nfilled_before << " new voxels." << endl; }
+        cout << "  found " << nfilled - nfilled_before << " new voxels." << endl;
+
 		vox_total_timer.stop(); // TIMING
 
 		// build SVO
