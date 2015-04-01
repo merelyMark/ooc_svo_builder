@@ -388,9 +388,9 @@ int main(int argc, char *argv[]) {
 
         delete reader;
 
-        //t.join();
-        //t.start(boost::bind(runSVO, builder, i, use_data, data[current_data_idx], data_size[current_data_idx]));
-        runSVO(builder, i, use_data, data[current_data_idx], data_size[current_data_idx]);
+        t.join();
+        t.start(boost::bind(runSVO, builder, i, use_data, data[current_data_idx], data_size[current_data_idx]));
+        //runSVO(builder, i, use_data, data[current_data_idx], data_size[current_data_idx]);
         current_data_idx = (current_data_idx + 1 ) % 2;
 
         first_time = false;
@@ -398,7 +398,7 @@ int main(int argc, char *argv[]) {
 	}
 
     t.join();
-	svo_total_timer.start(); svo_algo_timer.start(); // TIMING
+    svo_total_timer.start(); svo_algo_timer.start(); // TIMING
 	builder.finalizeTree(); // finalize SVO so it gets written to disk
 	cout << "done" << endl;
     cout << "Total amount of voxels: " << nfilled << endl;
