@@ -2,6 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 
 PROJECT ( OutOfCoreSparseVoxelOctree )
 
+SET(CMAKE_BUILD_TYPE Release)
 FIND_PACKAGE ( OpenMP REQUIRED )
 FIND_PACKAGE(CUDA)
 if (CUDA_SDK_ROOT_DIR MATCHES "CUDA_SDK_ROOT_DIR-NOTFOUND")
@@ -84,42 +85,10 @@ INCLUDE_DIRECTORIES (
 
 ADD_DEFINITIONS("-std=c++0x -march=native -msse2")
 
-SET(SVO_BUILDER_SRCS
-  ./src/ooc_svo_builder/svo_builder/main.cpp
-  ./src/ooc_svo_builder/svo_builder/OctreeBuilder.cpp
-  ./src/ooc_svo_builder/svo_builder/partitioner.cpp
-  ./src/ooc_svo_builder/svo_builder/voxelizer.cpp
-
-)
-ADD_EXECUTABLE (  svo_builder ${SVO_BUILDER_SRCS} )
-
-SET(SVO_BUILDER_CUDA_SRCS
-  ./src/ooc_svo_builder/svo_builder_cuda/main.cpp
-  ./src/ooc_svo_builder/svo_builder_cuda/OctreeBuilder.cpp
-  ./src/ooc_svo_builder/svo_builder_cuda/partitioner.cpp
-  ./src/ooc_svo_builder/svo_builder_cuda/voxelizer.cpp
-  ./src/ooc_svo_builder/svo_builder_cuda/cuda.cu
-  ./src/ooc_svo_builder/svo_builder_cuda/ErrorCheck.cpp
-)
-CUDA_ADD_EXECUTABLE (  svo_builder_cuda ${SVO_BUILDER_CUDA_SRCS} )
-
-SET(TRI_CONVERT_SRCS
-  ./src/ooc_svo_builder/tri_convert/tri_convert.cpp
-)
-ADD_EXECUTABLE ( tri_convert ${TRI_CONVERT_SRCS} )
-
-TARGET_LINK_LIBRARIES ( svo_builder
-  gomp
-tbb
-	tbbmalloc_proxy
-)
-TARGET_LINK_LIBRARIES ( svo_builder_cuda
-  gomp
-tbb
-        tbbmalloc_proxy
-)
-TARGET_LINK_LIBRARIES ( tri_convert
-  ${Trimesh2_LIBRARY}
-  gomp
+SUBDIRS(
+    src/ooc_svo_builder/svo_builder
+    src/ooc_svo_builder/tri_convert
+    src/svo_builder/svo_builder_cuda
+    src/ooc_svo_builder/svo_builder_cuda
 )
 
